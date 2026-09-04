@@ -1,0 +1,67 @@
+[DESIGN PROMPT]
+[PASTE DESIGN PROMPT HERE]
+
+Use the design concept described above as the core creative direction and apply it to every uploaded transparent PNG product mockup.
+
+RULES:
+- Treat all uploaded mockups in the same request as one product collection generated in a single run.
+- Automatically identify each product type, material, printable area, perspective, folds, curvature, lighting, and orientation.
+- Preserve the original product form, silhouette, proportions, camera angle, folds, material, and overall structure of each uploaded mockup.
+- Keep the core design concept consistent across all products, including the main theme, message, style, niche, and key visual identity.
+- You may adapt the design layout, composition, scale, placement, arrangement, and colors so it fits each product form in the most visually appealing and commercially effective way.
+- Improve contrast, hierarchy, balance, and readability where needed.
+- Do not change the design into a different concept. The original niche, message, and creative direction must remain recognizable.
+- Make the design look realistically printed or applied to the actual product material, following perspective, folds, curvature, texture, lighting, shadows, and reflections. Never make it look like a flat pasted sticker.
+
+BACKGROUND — VERY IMPORTANT:
+- The background for each product must be derived directly from the design niche and design concept.
+- First analyze the design and identify:
+  1. niche
+  2. sub-niche
+  3. subject matter
+  4. target audience
+  5. lifestyle or culture connected to the niche
+  6. mood and emotion
+  7. era or aesthetic
+  8. key objects, environments, activities, symbols, and visual references associated with that niche
+- Then create a background environment that clearly belongs to that exact niche.
+
+BACKGROUND VARIATION RULE:
+- If multiple mockups are uploaded, each final image must have a DIFFERENT background scene.
+- Do not reuse the same background composition, same environment, same prop arrangement, or same scene structure across products.
+- Each product must have its own unique setting, unique composition, and unique environmental details.
+- The backgrounds must clearly feel different from one another, not just slightly adjusted versions of the same scene.
+- Vary the environment using different locations, angles, props, surfaces, staging, depth, and contextual details.
+- Even when staying inside the same niche, create distinct scene concepts for each product.
+- Avoid repetitive outputs such as the same room, same table, same wall, same landscape, or same setup with only minor changes.
+
+CONSISTENCY ACROSS THE SET:
+- All images must still feel like they belong to the same niche world, same collection, and same campaign.
+- Keep consistency in overall niche identity, mood, visual quality, and art direction.
+- The set should feel cohesive, but each individual background must still be clearly unique.
+
+BACKGROUND QUALITY:
+- The background should make the niche immediately understandable even without reading the design.
+- Do not use a generic studio, random room, plain abstract backdrop, or unrelated setting unless the niche specifically calls for it.
+- Use niche-specific environments, props, atmosphere, textures, scenery, architecture, lighting, and contextual details.
+- Keep the product as the visual hero.
+- Background should support the product without overpowering it.
+- Use realistic depth, contact shadows, environmental reflections, and believable product integration.
+- Do not add unnecessary duplicate products.
+
+OUTPUT:
+- Generate all results in one run.
+- For each uploaded mockup, create exactly ONE separate finished product image.
+- 1 mockup = 1 image
+- 3 mockups = 3 separate images
+- 5 mockups = 5 separate images
+- Never combine multiple mockups into one image.
+- Never create a collage, grid, contact sheet, or multi-product composition.
+
+Every final image must:
+- be square 1:1
+- contain only its corresponding uploaded mockup
+- use the same core design concept
+- have a unique niche-appropriate background
+- look realistic, attractive, and commercially polished
+- be suitable for e-commerce, advertising, and social media product marketing

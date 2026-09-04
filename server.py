@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import sys
 import threading
 import time
@@ -113,6 +114,97 @@ def delete_template(name: str):
 
 
 # =============================================================== prompts
+# Khuôn prompt: phần thiết kế của từng dòng CSV được nhét vào chỗ placeholder,
+# phần RULES phía sau là cố định cho mọi prompt. Sửa được trong file, không phải
+# sửa code.
+PROMPT_TEMPLATE_FILE = ROOT / "data" / "prompt_template.txt"
+DESIGN_PLACEHOLDER = "PASTE DESIGN PROMPT HERE"
+
+
+def load_prompt_template() -> str:
+    try:
+        return PROMPT_TEMPLATE_FILE.read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        return DESIGN_PLACEHOLDER
+
+
+def build_prompt(design: str) -> str:
+    """Ghép phần thiết kế vào khuôn. Khuôn hỏng thì trả về phần thiết kế thôi."""
+    tpl = load_prompt_template()
+    if DESIGN_PLACEHOLDER not in tpl:
+        log.warning("Khuôn prompt thiếu '%s' - dùng tạm phần thiết kế trần.",
+                    DESIGN_PLACEHOLDER)
+        return design.strip()
+    return tpl.replace(DESIGN_PLACEHOLDER, design.strip())
+
+
+@app.get("/api/prompt-template")
+def get_prompt_template():
+    return {"template": load_prompt_template(),
+            "placeholder": DESIGN_PLACEHOLDER}
+
+
+@app.put("/api/prompt-template")
+def set_prompt_template(payload: dict):
+    tpl = (payload or {}).get("template") or ""
+    if DESIGN_PLACEHOLDER not in tpl:
+        raise HTTPException(400, f"Khuôn phải chứa dòng '{DESIGN_PLACEHOLDER}'.")
+    PROMPT_TEMPLATE_FILE.write_text(tpl, encoding="utf-8")
+    return {"ok": True}
+
+
+@app.post("/api/prompts/import-csv")
+async def import_prompts_csv(file: UploadFile):
+    """Nhập prompt hàng loạt từ CSV.
+
+    Cần cột PROMPT (phần thiết kế). TOPIC và Style dùng để đặt tên thư mục ảnh
+    theo quy tắc <ProductType>__<Topic>__<Design>, thiếu thì suy từ tên prompt.
+    """
+    import csv
+    import io
+
+    raw = (await file.read()).decode("utf-8-sig", errors="replace")
+    try:
+        rows = list(csv.DictReader(io.StringIO(raw)))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"Không đọc được CSV: {e}")
+    if not rows:
+        raise HTTPException(400, "CSV rỗng.")
+
+    def col(row: dict, *names: str) -> str:
+        for k, v in row.items():
+            if k and k.strip().lower() in names:
+                return (v or "").strip()
+        return ""
+
+    state = load_state()
+    prompts = state.setdefault("prompts", [])
+    added, skipped = [], 0
+    for row in rows:
+        design_text = col(row, "prompt", "design prompt", "noi dung", "nội dung")
+        if not design_text:
+            skipped += 1
+            continue
+        topic = col(row, "topic", "chu de", "chủ đề")
+        style = col(row, "style", "design", "phong cach", "phong cách")
+        name = topic or col(row, "name", "ten", "tên") or f"Prompt {len(prompts) + 1}"
+        prompts.append({
+            "id": uuid.uuid4().hex[:8],
+            "name": name,
+            "text": build_prompt(design_text),
+            "topic": topic or name,
+            "design": style or "Design",
+        })
+        added.append(name)
+    if not added:
+        raise HTTPException(400, "Không có dòng nào có cột PROMPT.")
+    save_state(state)
+    log.info("Nhập %d prompt từ CSV (bỏ qua %d dòng trống).", len(added), skipped)
+    return {"added": len(added), "skipped": skipped, "names": added[:20],
+            "total": len(prompts)}
+
+
+
 @app.get("/api/prompts")
 def list_prompts():
     return {"items": load_state().get("prompts", [])}
@@ -121,9 +213,12 @@ def list_prompts():
 @app.post("/api/prompts")
 def add_prompt(payload: dict):
     s = load_state()
+    name = (payload.get("name") or "Prompt").strip()
     p = {"id": uuid.uuid4().hex[:8],
-         "name": (payload.get("name") or "Prompt").strip(),
-         "text": (payload.get("text") or "").strip()}
+         "name": name,
+         "text": (payload.get("text") or "").strip(),
+         "topic": (payload.get("topic") or name).strip(),
+         "design": (payload.get("design") or "Design").strip()}
     s.setdefault("prompts", []).append(p)
     save_state(s)
     return p
@@ -139,6 +234,16 @@ def edit_prompt(pid: str, payload: dict):
             save_state(s)
             return p
     raise HTTPException(404, "Không thấy prompt")
+
+
+@app.delete("/api/prompts")
+def delete_all_prompts():
+    st = load_state()
+    n = len(st.get("prompts", []))
+    st["prompts"] = []
+    save_state(st)
+    log.info("Đã xoá toàn bộ %d prompt.", n)
+    return {"ok": True, "deleted": n}
 
 
 @app.delete("/api/prompts/{pid}")
@@ -238,6 +343,50 @@ def _run_pool_thread(jobs: list[dict] | None = None,
         loop.close()
 
 
+def _product_type(template_name: str) -> str:
+    """Suy loại sản phẩm từ tên file template.
+
+    'T-shirt-4d94ad.png' -> 'T-Shirt' | 'Tote bag-522486.png' -> 'Tote-Bag'
+    (hậu tố -abc123 do lúc upload sinh ra nên phải cắt đi).
+    """
+    stem = re.sub(r"-[0-9a-f]{6}$", "", Path(template_name).stem)
+    words = []
+    for part in re.split(r"[\s_]+", stem.strip()):
+        piece = "-".join(w[:1].upper() + w[1:] for w in part.split("-") if w)
+        if piece:
+            words.append(piece)
+    return "-".join(words) or "Product"
+
+
+def _name_part(value: str, fallback: str) -> str:
+    """Một thành phần trong tên thư mục: bỏ ký tự cấm, khoảng trắng -> gạch nối."""
+    cleaned = re.sub(r'[\/*?:"<>|]', "", value or "").strip()
+    cleaned = re.sub(r"\s+", "-", cleaned).strip("-. ")[:40]
+    return cleaned or fallback
+
+
+def _folder_has_image(folder: str) -> bool:
+    """Thư mục output này đã có ảnh chưa.
+
+    Đây là mốc để GEN LẠI MÀ KHÔNG LÀM LẠI: tên thư mục
+    <ProductType>__<Topic>__<Design> đã định danh duy nhất từng ảnh cần có, nên
+    chỉ cần nhìn đĩa là biết cái nào xong. Không cần sổ sách riêng, và còn sống
+    sót qua cả restart server lẫn mất điện.
+    """
+    d = OUTPUTS / folder
+    if not d.is_dir():
+        return False
+    return any(f.suffix.lower() in IMG_EXT and f.stat().st_size > 0
+               for f in d.iterdir() if f.is_file())
+
+
+def _out_folder(template_name: str, topic: str, design: str) -> str:
+    """<ProductType>__<Topic>__<Design> - mỗi ảnh sản phẩm một thư mục."""
+    return "__".join((_product_type(template_name),
+                      _name_part(topic, "Topic"),
+                      _name_part(design, "Design")))
+
+
 # Tên file/thư mục Windows không được trùng mấy tên thiết bị này
 _WIN_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
                  *(f"lpt{i}" for i in range(1, 10))}
@@ -292,12 +441,15 @@ async def generate(payload: dict):
         if not tp.exists():
             continue
         jid = uuid.uuid4().hex[:8]
-        out_name = f"{Path(name).stem}__{prompt['id']}-{jid}.png"
+        folder = _out_folder(name, prompt.get("topic") or prompt["name"],
+                             prompt.get("design") or "Design")
+        out_name = f"{Path(name).stem}__{jid}.png"
         job = {"id": jid, "template": str(tp), "template_name": name,
                "template_url": f"/files/templates/{name}",
                "prompt": prompt["text"], "prompt_name": prompt["name"],
-               "dest": str(OUTPUTS / out_name),
-               "result_url": f"/files/outputs/{out_name}",
+               "dest": str(OUTPUTS / folder / out_name),
+               "result_url": f"/files/outputs/{folder}/{out_name}",
+               "folder": folder,
                "status": "pending", "error": None}
         JOBS[jid] = job
         jobs.append(job)
@@ -337,6 +489,10 @@ async def generate_collections(payload: dict):
         prompt_ids.append(single_pid)
 
     count = max(1, min(100, int(payload.get("count", 1))))
+    # Mặc định BỎ QUA ảnh đã có: chạy lại sau khi hết token thì chỉ làm phần thiếu.
+    skip_done = payload.get("skip_done", True) is not False
+    skipped_jobs = 0
+    skipped_cols = 0
 
     if not raw_collections and (not prompt_ids or not templates):
         raise HTTPException(400, "Cần chọn ít nhất 1 prompt và 1 template.")
@@ -357,15 +513,21 @@ async def generate_collections(payload: dict):
             c_pname = item.get("prompt_name", "Prompt")
             c_tpls = item.get("templates", [])
             cid = uuid.uuid4().hex[:8]
-            col_folder = OUTPUTS / c_name   # tạo khi lưu ảnh đầu tiên
+            c_topic = item.get("topic") or c_pname
+            c_design = item.get("design") or "Design"
             c_jobs = []
             for tname in c_tpls:
                 tp = TEMPLATES / tname
                 if not tp.exists():
                     continue
                 jid = uuid.uuid4().hex[:8]
+                # Mỗi ảnh nằm trong thư mục riêng: <ProductType>__<Topic>__<Design>
+                folder = _out_folder(tname, c_topic, c_design)
+                if skip_done and _folder_has_image(folder):
+                    skipped_jobs += 1        # đã gen rồi -> khỏi làm lại
+                    continue
                 out_name = f"{Path(tname).stem}__{jid}.png"
-                dest_path = col_folder / out_name
+                dest_path = OUTPUTS / folder / out_name
                 job = {
                     "id": jid,
                     "template": str(tp),
@@ -374,7 +536,8 @@ async def generate_collections(payload: dict):
                     "prompt": c_prompt,
                     "prompt_name": c_pname,
                     "dest": str(dest_path),
-                    "result_url": f"/files/outputs/{c_name}/{out_name}",
+                    "result_url": f"/files/outputs/{folder}/{out_name}",
+                    "folder": folder,
                     "status": "pending",
                     "error": None
                 }
@@ -391,6 +554,9 @@ async def generate_collections(payload: dict):
                 "worker": None,
                 "error": None
             }
+            if not c_jobs:
+                skipped_cols += 1        # cả bộ đã có ảnh -> khỏi mở chat
+                continue
             built_collections.append(col)
             COLLECTIONS[cid] = col
     else:
@@ -406,15 +572,20 @@ async def generate_collections(payload: dict):
                 suffix = f"_Col_{col_num:02d}_{uuid.uuid4().hex[:4]}"
                 c_name = _safe_folder_name(f"{p_obj['name']}{suffix}")
                 cid = uuid.uuid4().hex[:8]
-                col_folder = OUTPUTS / c_name   # tạo khi lưu ảnh đầu tiên
+                c_topic = p_obj.get("topic") or p_obj["name"]
+                c_design = p_obj.get("design") or "Design"
                 c_jobs = []
                 for tname in templates:
                     tp = TEMPLATES / tname
                     if not tp.exists():
                         continue
                     jid = uuid.uuid4().hex[:8]
+                    folder = _out_folder(tname, c_topic, c_design)
+                    if skip_done and _folder_has_image(folder):
+                        skipped_jobs += 1        # đã gen rồi -> khỏi làm lại
+                        continue
                     out_name = f"{Path(tname).stem}__{jid}.png"
-                    dest_path = col_folder / out_name
+                    dest_path = OUTPUTS / folder / out_name
                     job = {
                         "id": jid,
                         "template": str(tp),
@@ -423,7 +594,8 @@ async def generate_collections(payload: dict):
                         "prompt": p_obj["text"],
                         "prompt_name": p_obj["name"],
                         "dest": str(dest_path),
-                        "result_url": f"/files/outputs/{c_name}/{out_name}",
+                        "result_url": f"/files/outputs/{folder}/{out_name}",
+                        "folder": folder,
                         "status": "pending",
                         "error": None
                     }
@@ -440,11 +612,20 @@ async def generate_collections(payload: dict):
                     "worker": None,
                     "error": None
                 }
+                if not c_jobs:
+                    skipped_cols += 1
+                    continue
                 built_collections.append(col)
                 COLLECTIONS[cid] = col
 
     if not built_collections:
+        if skipped_jobs or skipped_cols:
+            raise HTTPException(
+                409, f"Mọi ảnh đã có sẵn ({skipped_jobs} ảnh, {skipped_cols} bộ) - "
+                     "không còn gì để gen. Bỏ tick 'Bỏ qua ảnh đã có' nếu muốn làm lại.")
         raise HTTPException(400, "Không có collection hợp lệ nào được tạo.")
+    if skipped_jobs or skipped_cols:
+        log.info("Bỏ qua %d ảnh và %d bộ đã có sẵn.", skipped_jobs, skipped_cols)
 
     if is_running:
         # Chạy trong loop của pool rồi CHỜ kết quả: pool có thể từ chối (đang chạy
@@ -473,6 +654,8 @@ async def generate_collections(payload: dict):
             "started_collections": len(built_collections),
             "total_collections": len(COLLECTIONS),
             "total_jobs": len(JOBS),
+            "skipped_jobs": skipped_jobs,
+            "skipped_collections": skipped_cols,
             "profiles": RUN.get("profiles", valid_profiles),
             "collections": _public_collections()
         }
@@ -489,6 +672,8 @@ async def generate_collections(payload: dict):
         "started_collections": len(built_collections),
         "total_collections": len(COLLECTIONS),
         "total_jobs": len(JOBS),
+        "skipped_jobs": skipped_jobs,
+        "skipped_collections": skipped_cols,
         "profiles": valid_profiles,
         "collections": _public_collections()
     }
@@ -572,7 +757,7 @@ def download_jobs_zip(cid: str | None = None):
             for j in c.get("jobs", []):
                 p = Path(j["dest"])
                 if p.exists():
-                    zf.write(p, arcname=f"{folder_name}/{p.name}")
+                    zf.write(p, arcname=f"{j.get('folder', folder_name)}/{p.name}")
                     count += 1
             filename = f"collection_{folder_name}.zip"
         elif COLLECTIONS:
@@ -581,7 +766,7 @@ def download_jobs_zip(cid: str | None = None):
                 for j in c.get("jobs", []):
                     p = Path(j["dest"])
                     if p.exists():
-                        zf.write(p, arcname=f"{folder_name}/{p.name}")
+                        zf.write(p, arcname=f"{j.get('folder', folder_name)}/{p.name}")
                         count += 1
             filename = f"campaign_collections_{int(time.time())}.zip"
         else:

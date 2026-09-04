@@ -21,6 +21,7 @@ import asyncio
 import base64
 import hashlib
 import logging
+import re
 from io import BytesIO
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -118,6 +119,21 @@ ORDER_JS = """() => {
         }
     }
     return keys;
+}"""
+
+
+# Đếm ảnh đang đính kèm trong khung soạn + còn đang upload không.
+ATTACH_JS = """() => {
+    const form = document.querySelector('form') || document.body;
+    const q = (s) => form.querySelectorAll(s).length;
+    // 1 đính kèm có thể khớp nhiều kiểu selector -> lấy max, đừng cộng
+    const n = Math.max(
+        q('img[src^="blob:"], img[src^="data:"]'),
+        q('[data-testid*="attachment" i]'),
+        q('button[aria-label*="Remove" i], button[aria-label*="Xoá" i]'));
+    const up = form.querySelector(
+        '[role="progressbar"], svg[class*="spin" i], [class*="uploading" i]');
+    return {n, uploading: !!up};
 }"""
 
 
@@ -404,6 +420,10 @@ class ChatGPTPool:
         self._boot: list[asyncio.Task] = []
         # profile -> lý do hết lượt. Server/UI đọc trực tiếp dict này.
         self.exhausted: dict[str, str] = {}
+        # Tài khoản "đứng hình": mở chat rồi mà không nhúc nhích (không đính kèm
+        # được ảnh, không gửi được...). Khác hết lượt nhưng cùng cách xử: ngừng
+        # giao việc, đẩy collection sang tài khoản khác.
+        self.stalled: dict[str, str] = {}
         # Tạo NGAY từ đầu. Trước đây queue chỉ ra đời khi run_collections chạy, mà
         # lúc đó Chrome còn đang khởi động vài giây -> collection nạp thêm trong
         # khoảng đó rơi vào hư không, server vẫn báo "đã xếp hàng".
@@ -422,6 +442,9 @@ class ChatGPTPool:
         # 5s: đủ để bắt cú "ChatGPT vẽ lại ảnh ở phút chót" (lần nào cũng mất hơn
         # 20s mới ra ảnh thay), mà không bắt mỗi tin nhắn phải đứng chờ 8 giây.
         self.settle_seconds = float(r.get("settle_seconds", 5))
+        # Quá ngần này giây mà một collection chưa ra nổi ảnh nào -> coi tài khoản
+        # là đứng hình, bỏ sang tài khoản khác thay vì ngồi thử lại đủ 4 vòng.
+        self.stall_timeout = float(r.get("stall_timeout", 120))
 
     # ---------------- lifecycle ----------------
     async def __aenter__(self) -> "ChatGPTPool":
@@ -486,6 +509,10 @@ class ChatGPTPool:
             open_tab(s, first if i == 0 else None) for i, s in enumerate(slots)
         ))
 
+    def blocked(self, profile: str) -> str | None:
+        """Lý do tài khoản này không nhận việc nữa (hết lượt / đứng hình)."""
+        return self.exhausted.get(profile) or self.stalled.get(profile)
+
     def add_profiles(self, names: list[str]) -> int:
         """Bổ sung tài khoản vào đội hình đang chạy (dùng khi UI chọn thêm acc).
 
@@ -494,7 +521,7 @@ class ChatGPTPool:
         """
         added = 0
         for name in names:
-            if not name or name in self.exhausted:
+            if not name or self.blocked(name):
                 continue
             if any(sl.profile == name for sl in self._slots):
                 continue
@@ -517,7 +544,7 @@ class ChatGPTPool:
         """
         while self.reserves:
             name = self.reserves.pop(0)
-            if name in self.exhausted or any(s.profile == name for s in self._slots):
+            if self.blocked(name) or any(s.profile == name for s in self._slots):
                 continue
             slots = [_Slot(name, i, len(self._slots) + i)
                      for i in range(self.tabs_per_account)]
@@ -586,39 +613,93 @@ class ChatGPTPool:
         await page.goto(URL, wait_until="domcontentloaded", timeout=self.nav_timeout)
         await self._find(page, SEL_PROMPT, 30_000)
 
-    async def _attach_once(self, page: Page, templates: list[Path], wait_s: int) -> bool:
-        """Nạp CẢ danh sách ảnh vào input rồi chờ đủ thumbnail upload xong."""
-        want = len(templates)
+    async def _count_attached(self, page: Page) -> int:
+        """Số ảnh đang đính kèm trong khung soạn."""
         try:
-            await page.locator(SEL_FILE_INPUT).first.wait_for(state="attached", timeout=10_000)
-        except PWTimeout:
-            log.warning("Không thấy input[type=file].")
+            return int((await page.evaluate(ATTACH_JS)).get("n", 0))
+        except Exception:  # noqa: BLE001
+            return 0
+
+    async def _attach_via_chooser(self, page: Page, files: list[str]) -> bool:
+        """Dự phòng: bấm nút "+" rồi hứng hộp thoại chọn file.
+
+        Không phụ thuộc cấu trúc DOM, dùng khi mọi input[type=file] đều không ăn.
+        """
+        try:
+            btn = page.get_by_role(
+                "button",
+                name=re.compile(r"add files|attach|thêm tệp|đính kèm", re.I)).first
+            async with page.expect_file_chooser(timeout=10_000) as fc:
+                await btn.click(timeout=5_000)
+                try:                       # có bản hiện menu con trước
+                    item = page.get_by_role(
+                        "menuitem", name=re.compile(r"photo|file|ảnh|tệp", re.I)).first
+                    await item.click(timeout=3_000)
+                except Exception:  # noqa: BLE001
+                    pass
+            chooser = await fc.value
+            await chooser.set_files(files)
+            log.info("Đính kèm qua hộp thoại chọn file.")
+            return True
+        except Exception as e:  # noqa: BLE001
+            log.debug("Đính kèm qua file chooser không được: %s", e)
             return False
-        # set_input_files nhận cả list -> đính kèm nhiều ảnh trong 1 tin nhắn
+
+    async def _attach_once(self, page: Page, templates: list[Path], wait_s: int) -> bool:
+        """Nạp ảnh vào khung soạn rồi chờ đủ thumbnail upload xong.
+
+        QUAN TRỌNG: trang ChatGPT có nhiều input[type=file], trong đó mấy cái
+        `mobile-composer-*` là của khung soạn BẢN MOBILE. Nhét ảnh vào đó thì khung
+        desktop không nhận gì: composer trống trơn, tool ngồi chờ thumbnail không
+        bao giờ tới rồi treo. Vì vậy phải thử LẦN LƯỢT từng input (ưu tiên cái không
+        phải mobile) và kiểm tra thật sự có thumbnail chưa, thay vì tin cái đầu tiên.
+        """
+        want = len(templates)
         files = [str(t) for t in templates]
+        try:
+            await page.locator(SEL_FILE_INPUT).first.wait_for(state="attached",
+                                                              timeout=10_000)
+        except PWTimeout:
+            log.warning("Không thấy input[type=file] nào.")
+
+        ranked = []
         for inp in await page.locator(SEL_FILE_INPUT).all():
             try:
+                ident = ((await inp.get_attribute("id")) or "").lower()
+            except Exception:  # noqa: BLE001
+                ident = ""
+            if "camera" in ident:
+                continue                            # chụp ảnh, không dùng được
+            ranked.append((1 if ident.startswith("mobile-") else 0, ident, inp))
+        ranked.sort(key=lambda x: x[0])
+
+        attached = False
+        for _, ident, inp in ranked:
+            try:
                 await inp.set_input_files(files)
-                break
-            except Exception:
+            except Exception:  # noqa: BLE001
                 continue
+            for _ in range(10):                     # ~5s xem input này có ăn không
+                if await self._count_attached(page) >= 1:
+                    attached = True
+                    break
+                await page.wait_for_timeout(500)
+            if attached:
+                log.debug("Đính kèm được qua input '%s'.", ident or "(không id)")
+                break
+            log.info("Input '%s' không nhận ảnh - thử input khác.",
+                     ident or "(không id)")
+
+        if not attached and not await self._attach_via_chooser(page, files):
+            log.warning("Không nhét được ảnh vào khung soạn (đã thử %d input).",
+                        len(ranked))
+            return False
 
         # chờ ĐỦ số thumbnail hiện + không còn spinner nào
         deadline = asyncio.get_event_loop().time() + wait_s
         last_n = -1
         while asyncio.get_event_loop().time() < deadline:
-            st = await page.evaluate("""() => {
-                const form = document.querySelector('form') || document.body;
-                const q = (s) => form.querySelectorAll(s).length;
-                // 1 đính kèm có thể khớp nhiều kiểu selector -> lấy max, đừng cộng
-                const n = Math.max(
-                    q('img[src^="blob:"], img[src^="data:"]'),
-                    q('[data-testid*="attachment" i]'),
-                    q('button[aria-label*="Remove" i], button[aria-label*="Xoá" i]'));
-                const up = form.querySelector(
-                    '[role="progressbar"], svg[class*="spin" i], [class*="uploading" i]');
-                return {n, uploading: !!up};
-            }""")
+            st = await page.evaluate(ATTACH_JS)
             if st["n"] != last_n:
                 last_n = st["n"]
                 log.debug("đính kèm %d/%d", st["n"], want)
@@ -999,6 +1080,7 @@ class ChatGPTPool:
                  slot.label, col.get("name"), len(pending_jobs), len(chunks), slot.profile)
 
         quota: str | None = None
+        stall_since = asyncio.get_event_loop().time()   # mốc để phát hiện đứng hình
         for ci, chunk in enumerate(chunks):
             if quota:
                 break
@@ -1066,9 +1148,29 @@ class ChatGPTPool:
                         last_err = e
                     j["status"] = "done" if ok else "failed"
                     j["error"] = None if ok else "tải ảnh về thất bại"
+                    if ok:
+                        stall_since = asyncio.get_event_loop().time()   # còn sống
                     await emit(j)
 
                 pending = pending[len(imgs):]
+
+                # ĐỨNG HÌNH: quá stall_timeout mà chưa ra nổi ảnh nào (thường là
+                # không đính kèm được, hoặc trang treo). Thử lại thêm mấy vòng nữa
+                # cũng vô ích và mất hàng phút - bỏ tài khoản, đẩy việc sang acc khác.
+                idle = asyncio.get_event_loop().time() - stall_since
+                if pending and not quota and idle > self.stall_timeout:
+                    self.stalled[slot.profile] = (
+                        f"đứng hình {int(idle)}s không ra ảnh nào "
+                        f"({last_err or 'không rõ nguyên nhân'})")
+                    log.error("[%s] %s -> chuyển collection '%s' sang tài khoản khác.",
+                              slot.label, self.stalled[slot.profile], col.get("name"))
+                    for j in pending:
+                        j["status"] = "pending"
+                        j["error"] = None
+                        await emit(j)
+                    col["status"] = "pending"
+                    return False
+
                 if pending and not quota and round_no <= self.max_retries:
                     log.warning("[%s] col '%s' còn thiếu %d ảnh -> xin ChatGPT làm nốt.",
                                 slot.label, col.get("name"), len(pending))
@@ -1192,11 +1294,11 @@ class ChatGPTPool:
                 on_fleet_update(profile, {"status": "idle", "collection": None, "collection_name": None})
 
             while True:
-                if profile in self.exhausted:
+                if self.blocked(profile):
                     if on_fleet_update:
                         on_fleet_update(profile, {
                             "status": "exhausted",
-                            "reason": self.exhausted[profile],
+                            "reason": self.blocked(profile),
                             "collection": None
                         })
                     break
@@ -1253,17 +1355,17 @@ class ChatGPTPool:
                     self._last_active_time = loop.time()
                     self.collection_queue.task_done()
 
-                if not ok and profile in self.exhausted:
+                if not ok and self.blocked(profile):
                     if on_fleet_update:
                         on_fleet_update(profile, {
                             "status": "exhausted",
-                            "reason": self.exhausted[profile],
+                            "reason": self.blocked(profile),
                             "collection": None
                         })
-                    # Hết quota khi đang dở collection -> đẩy lại cho worker khác
+                    # Hết quota / đứng hình khi đang dở collection -> đẩy lại cho worker khác
                     unfinished = [j for j in col.get("jobs", []) if j.get("status") != "done"]
                     if unfinished:
-                        log.warning("[%s] Hết quota khi dở collection '%s'. Đẩy lại hàng đợi.",
+                        log.warning("[%s] Ngừng giữa chừng ở collection '%s'. Đẩy lại hàng đợi.",
                                     slot.label, col["name"])
                         col["status"] = "pending"
                         col["worker"] = None
@@ -1290,7 +1392,7 @@ class ChatGPTPool:
             if left == 0:
                 break
             usable = [sl for sl in self._slots
-                      if sl.page is not None and sl.profile not in self.exhausted]
+                      if sl.page is not None and not self.blocked(sl.profile)]
             if not usable:
                 # Đội hình hết lượt/chết hết -> kéo tài khoản dự bị vào.
                 if await self.recruit_reserve() is None:
@@ -1307,7 +1409,7 @@ class ChatGPTPool:
 
         # Còn collection chưa chạy: nói ĐÚNG lý do thay vì mặc định đổ cho hết lượt
         if not self.collection_queue.empty():
-            if self._slots and all(s.profile in self.exhausted for s in self._slots):
+            if self._slots and all(self.blocked(s.profile) for s in self._slots):
                 reason = ("Tất cả tài khoản ChatGPT (kể cả dự bị) đều đã hết lượt "
                           "tạo ảnh.")
             else:

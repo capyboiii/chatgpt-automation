@@ -24,3 +24,4 @@ run:
   max_retries: 3
   batch_size: 6
   settle_seconds: 8
+  stall_timeout: 120

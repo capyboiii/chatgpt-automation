@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=42">
+  <link rel="stylesheet" href="style.css?v=45">
 </head>
 <body>
   <!-- Ambient backdrop glows -->
@@ -190,6 +190,15 @@
           <div class="panel-head-actions">
             <button type="button" id="btn-select-all-prompts" class="btn action-btn sm" title="Chọn tất cả để tạo Collections hàng loạt">
               Chọn tất cả
+            </button>
+            <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
+            <button type="button" id="btn-import-csv" class="btn action-btn sm"
+                    title="Nhập prompt hàng loạt từ CSV (cột PROMPT, TOPIC, Style)">
+              Nhập CSV
+            </button>
+            <button type="button" id="clear-prompts" class="btn danger sm" title="Xoá tất cả prompt">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
+              Xoá hết
             </button>
             <button id="new-prompt" class="btn primary-subtle sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -389,6 +398,10 @@
         đồng nhất design.
       </p>
       <div id="acc-modal-list" class="acc-pick-list"></div>
+      <label class="skip-done-row" title="Thư mục nào đã có ảnh thì bỏ qua, chỉ gen phần còn thiếu">
+        <input type="checkbox" id="skip-done" checked>
+        <span>Bỏ qua ảnh đã có (gen tiếp phần còn thiếu)</span>
+      </label>
       <div class="form-actions">
         <button type="button" id="acc-modal-cancel" class="btn ghost sm">Huỷ</button>
         <button type="button" id="acc-modal-go" class="btn primary sm">Bắt đầu gen</button>
@@ -413,6 +426,6 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=42"></script>
+  <script src="app.js?v=45"></script>
 </body>
 </html>

@@ -657,6 +657,55 @@ async function loadPrompts() {
   }
 }
 
+$("#clear-prompts")?.addEventListener("click", async () => {
+  const n = state.prompts.length;
+  if (!n) return;
+  if (!confirm(`Xoá toàn bộ ${n} prompt?`)) return;
+  try {
+    const r = await (await fetch("/api/prompts", { method: "DELETE" })).json();
+    state.promptId = null;
+    state.selectedPrompts?.clear?.();
+    showToast(`Đã xoá ${r.deleted} prompt`, "info");
+    loadPrompts();
+  } catch (e) {
+    showToast(`Lỗi: ${e.message}`, "error");
+  }
+});
+
+// ---- Nhập prompt hàng loạt từ CSV ------------------------------------------
+// CSV chỉ chứa PHẦN THIẾT KẾ; server bọc nó vào khuôn RULES trong
+// data/prompt_template.txt. Cột TOPIC + Style dùng để đặt tên thư mục ảnh.
+$("#btn-import-csv")?.addEventListener("click", () => $("#csv-input")?.click());
+
+$("#csv-input")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+
+  const btn = $("#btn-import-csv");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Đang nhập…";
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/prompts/import-csv", { method: "POST", body: fd });
+    const d = await res.json();
+    if (!res.ok) {
+      showToast(d.detail || "Không nhập được CSV", "error");
+    } else {
+      showToast(`Đã nhập ${d.added} prompt` +
+                (d.skipped ? `, bỏ qua ${d.skipped} dòng trống` : ""), "success");
+      loadPrompts();
+    }
+  } catch (err) {
+    showToast(`Lỗi: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+});
+
 function renderPrompts() {
   const list = $("#prompt-list");
   const badge = $("#prompt-select-badge");
@@ -695,7 +744,7 @@ function renderPrompts() {
           <div class="prompt-title">${esc(p.name)}</div>
           <div class="prompt-snippet">${esc(p.text)}</div>
           <div class="prompt-meta">
-            ${p.text.length} ký tự
+            ${p.design ? `${esc(p.topic || p.name)} · ${esc(p.design)} · ` : ""}${p.text.length} ký tự
             ${p.text.length > 120 ? `<button type="button" class="prompt-more" data-more="${p.id}">Xem thêm</button>` : ""}
           </div>
         </div>
@@ -1331,7 +1380,8 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
       profiles: profiles,
       templates: [...state.selected],
       prompt_ids: [...state.selectedPrompts],
-      count: 1
+      count: 1,
+      skip_done: $("#skip-done")?.checked !== false
     };
 
     try {
@@ -1348,7 +1398,11 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
       }
 
       const d = await res.json();
-      showToast(`Bắt đầu chiến dịch: ${d.started_collections} collections trên ${d.profiles.length} tài khoản!`, "success");
+      const skipMsg = d.skipped_jobs
+        ? ` (bỏ qua ${d.skipped_jobs} ảnh đã có${d.skipped_collections ? `, ${d.skipped_collections} bộ trọn vẹn` : ""})`
+        : "";
+      showToast(`Bắt đầu: ${d.started_collections} collection trên ` +
+                `${d.profiles.length} tài khoản${skipMsg}`, "success");
 
       const resPanel = $("#results-panel");
       if (resPanel) {

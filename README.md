@@ -35,6 +35,29 @@ worker trong vòng nửa giây, không phải chờ đội hình cũ nghỉ. Sau
 nán lại `run.idle_exit_seconds` (mặc định 90s) với Chrome vẫn mở, nên lượt gen kế
 tiếp trong khoảng đó dùng lại luôn, khỏi tốn 10-30s bật lại cả đội.
 
+### Gen lại mà không làm lại (chống hết token giữa chừng)
+Tên thư mục `<ProductType>__<Topic>__<Design>` đã định danh duy nhất từng ảnh cần có,
+nên **đĩa chính là sổ tiến độ**: thư mục nào đã có ảnh thì lượt sau bỏ qua. Chạy 50 chủ
+đề mà hết token ở chủ đề thứ 23, chỉ cần bấm gen lại đúng như cũ — tool tự làm tiếp từ
+chỗ dở, bộ nào đã đủ ảnh thì không mở chat lần nữa. Cách này sống sót qua cả restart
+server lẫn mất điện vì không phụ thuộc sổ sách trong RAM.
+
+Bỏ tick **"Bỏ qua ảnh đã có"** trong hộp chọn tài khoản nếu muốn gen đè lại tất cả.
+Khi không còn gì để làm, tool báo luôn thay vì mở Chrome vô ích.
+
+### Tài khoản đứng hình
+Không phải lỗi nào cũng báo ra chữ. Có lúc tab mở chat xong rồi nằm im: khung soạn
+trống, không đính kèm được ảnh, không gửi được gì. Nếu quá `run.stall_timeout`
+(mặc định 120s) mà một collection chưa ra nổi ảnh nào, tool coi tài khoản đó là đứng
+hình, **ngừng giao việc cho nó** và đẩy collection sang tài khoản khác — thay vì ngồi
+thử lại đủ 4 vòng mất hàng phút.
+
+Nguyên nhân hay gặp nhất đã xử lý riêng: trang ChatGPT có nhiều `input[type=file]`,
+trong đó mấy cái `mobile-composer-*` là của khung soạn bản mobile. Nhét ảnh vào đó thì
+khung desktop không nhận gì. Tool giờ thử lần lượt từng input (ưu tiên cái không phải
+mobile) và **kiểm tra thumbnail có hiện ra thật không** mới đi tiếp; hỏng hết thì bấm
+nút "+" rồi hứng hộp thoại chọn file.
+
 ### Hết lượt thì chuyển tài khoản
 Tài khoản nào bị ChatGPT chặn vì hết lượt tạo ảnh sẽ bị đánh dấu và **ngừng nhận
 việc**. Collection đang dở của nó quay lại hàng đợi để tài khoản khác trong đội hình
