@@ -1,0 +1,13 @@
+browser:
+  headless: false
+  profiles_dir: ./.chrome-profiles
+  profiles:
+  - name: acc1
+    tabs: 1
+  - name: acc2
+    tabs: 1
+  generation_timeout: 300
+  nav_timeout: 90
+run:
+  max_retries: 2
+  batch_size: 6

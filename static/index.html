@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Mockup Forge — Tạo mockup tự động với ChatGPT">
+  <title>Mockup Forge — ChatGPT Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=29">
+</head>
+<body>
+  <!-- Ambient backdrop glows -->
+  <div class="ambient-glow glow-1" aria-hidden="true"></div>
+  <div class="ambient-glow glow-2" aria-hidden="true"></div>
+
+  <!-- Topbar Header -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+            <polyline points="2 17 12 22 22 17"></polyline>
+            <polyline points="2 12 12 17 22 12"></polyline>
+          </svg>
+        </div>
+        <div class="brand-text-group">
+          <span class="brand-name">Mockup<b>Forge</b></span>
+          <span class="brand-badge">ChatGPT Studio</span>
+        </div>
+      </div>
+
+      <div class="topbar-right">
+        <div id="pool-stat-pill" class="pool-stat-pill">
+          <span class="pulse-indicator"></span>
+          <span id="pool-info">0 tài khoản · 0 tab</span>
+        </div>
+
+        <button id="theme-toggle" class="icon-btn" title="Đổi giao diện Sáng / Tối" aria-label="Toggle theme">
+          <svg class="theme-icon sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <svg class="theme-icon moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="app-container">
+
+    <!-- ACCOUNTS SECTION -->
+    <section class="panel panel-accounts" id="sec-profiles">
+      <div class="panel-head">
+        <div class="panel-title-group">
+          <div class="section-icon-box emerald">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </div>
+          <div class="section-title-wrap">
+            <h2>Tài Khoản ChatGPT</h2>
+          </div>
+          <span id="total-tabs" class="stat-pill-badge">
+            <span class="stat-dot"></span>
+            <span class="stat-val">0 tài khoản</span>
+          </span>
+        </div>
+
+        <button type="button" id="toggle-profiles-view" class="btn primary-subtle sm">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          <span id="profiles-toggle-text">Thêm tài khoản</span>
+        </button>
+      </div>
+
+      <div id="profiles-collapsible" class="profiles-collapsible">
+        <div id="profiles-list" class="profiles-grid"></div>
+
+        <form id="add-profile" class="add-profile-bar" hidden>
+          <div class="input-with-icon">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+            <input type="text" id="ap-name" placeholder="Đặt tên profile (ví dụ: acc1, acc2...)" required autocomplete="off">
+          </div>
+          <button type="submit" class="btn primary sm">Lưu tài khoản</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- 2 MAIN WORKSPACE COLUMNS -->
+    <div class="main-columns">
+
+      <!-- TEMPLATES SECTION -->
+      <section class="panel panel-templates" id="sec-templates">
+        <div class="panel-head">
+          <div class="panel-title-group">
+            <div class="section-icon-box cyan">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
+                <circle cx="9" cy="9" r="2"></circle>
+                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
+              </svg>
+            </div>
+            <div class="section-title-wrap">
+              <h2>Mẫu Template</h2>
+            </div>
+            <span id="tpl-count" class="stat-pill-badge cyan">
+              <span class="stat-dot cyan"></span>
+              <span class="stat-val">0 đã chọn</span>
+            </span>
+          </div>
+
+          <div class="panel-head-actions">
+            <button type="button" class="btn action-btn sm" onclick="document.getElementById('file-input').click();">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
+              Tải ảnh
+            </button>
+            <button type="button" id="pick-folder" class="btn action-btn sm" title="Tải toàn bộ thư mục">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
+              Thư mục
+            </button>
+          </div>
+        </div>
+
+        <input type="file" id="file-input" accept="image/*" multiple hidden>
+        <input type="file" id="folder-input" webkitdirectory multiple hidden>
+
+        <!-- Dropzone -->
+        <label id="dropzone" class="dropzone-modern" for="file-input">
+          <div class="dropzone-icon-ring">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+          </div>
+          <span class="dropzone-label">Kéo thả ảnh hoặc cả thư mục vào đây (hoặc bấm <b>Tải ảnh</b> / <b>Thư mục</b>)</span>
+        </label>
+
+        <!-- Gallery Toolbar -->
+        <div class="gallery-toolbar" id="gallery-toolbar" hidden>
+          <label class="custom-chk">
+            <input type="checkbox" id="select-all">
+            <span class="chk-box"></span>
+            <span id="select-all-label">Chọn tất cả</span>
+          </label>
+
+          <div class="gallery-right-tools">
+            <div class="search-input-wrap">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              <input type="text" id="tpl-search" placeholder="Tìm ảnh...">
+            </div>
+            <button id="clear-templates" class="btn danger sm" title="Xoá tất cả ảnh">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
+              Xoá hết
+            </button>
+          </div>
+        </div>
+
+        <!-- Template Grid -->
+        <div id="tpl-grid" class="tpl-grid"></div>
+
+        <!-- Empty State -->
+        <div id="tpl-empty" class="empty-state">
+          <p>Chưa có ảnh nào. Bấm <b>"Tải ảnh"</b> hoặc kéo thả ảnh vào khung trên.</p>
+        </div>
+      </section>
+
+      <!-- PROMPTS SECTION -->
+      <section class="panel panel-prompts" id="sec-prompts">
+        <div class="panel-head">
+          <div class="panel-title-group">
+            <div class="section-icon-box purple">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
+              </svg>
+            </div>
+            <div class="section-title-wrap">
+              <h2>Prompt Thiết Kế</h2>
+            </div>
+          </div>
+
+          <button id="new-prompt" class="btn primary-subtle sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+            Tạo Prompt
+          </button>
+        </div>
+
+        <!-- Prompt List -->
+        <div id="prompt-list" class="prompt-list"></div>
+
+        <!-- Prompt Form -->
+        <form id="prompt-form" class="prompt-form-card" hidden>
+          <div class="form-header">
+            <h4 id="pf-title">Prompt mới</h4>
+            <button type="button" id="pf-close-btn" class="icon-btn-close">✕</button>
+          </div>
+          <input type="hidden" id="pf-id">
+          <div class="form-group">
+            <label class="form-label" for="pf-name">Tên câu lệnh</label>
+            <input type="text" id="pf-name" placeholder="Ví dụ: Áo thun Graphic, Cốc sứ Vintage..." required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pf-text">Nội dung câu lệnh ChatGPT</label>
+            <textarea id="pf-text" rows="4" placeholder="Mô tả chi tiết câu lệnh gửi tới ChatGPT..." required></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="pf-cancel" class="btn ghost sm">Huỷ</button>
+            <button type="submit" class="btn primary sm">Lưu Prompt</button>
+          </div>
+        </form>
+      </section>
+
+    </div>
+
+    <!-- RESULTS SECTION (Full Width) -->
+    <section class="panel panel-results" id="results-panel" hidden>
+      <div class="panel-head">
+        <div class="panel-title-group">
+          <div class="section-icon-box emerald">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
+          <div class="section-title-wrap">
+            <h2>Kết Quả Mockup</h2>
+          </div>
+          <span id="results-stat" class="stat-pill-badge emerald">
+            <span class="stat-dot emerald"></span>
+            <span class="stat-val">0 / 0 hoàn thành</span>
+          </span>
+        </div>
+
+        <div class="results-actions">
+          <a id="btn-download-all" href="/api/jobs/zip" class="btn primary sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Tải ZIP trọn bộ
+          </a>
+          <button id="btn-clear-jobs" class="btn ghost sm">Xoá</button>
+        </div>
+      </div>
+
+      <div class="progress-track-wrapper">
+        <div class="progress-track" id="jobs-progress-bar">
+          <div class="progress-fill" id="jobs-progress-fill" style="width: 0%;"></div>
+        </div>
+      </div>
+
+      <div id="quota-banner" class="quota-banner" hidden></div>
+
+      <div id="results-grid" class="results-grid"></div>
+    </section>
+
+  </main>
+
+  <!-- FLOATING RUN BAR -->
+  <div class="runbar" id="main-runbar">
+    <div class="runbar-text">
+      <span class="runbar-main-msg" id="runbar-main-msg">Chọn template và prompt để bắt đầu</span>
+    </div>
+
+    <div class="runbar-action">
+      <button id="run-btn" class="btn primary glow-btn" disabled>
+        <span id="run-btn-text">Tạo Mockup</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- LIGHTBOX MODAL -->
+  <!-- CHỌN TÀI KHOẢN TRƯỚC KHI GEN -->
+  <div id="acc-modal" class="acc-modal" hidden>
+    <div class="acc-modal-backdrop"></div>
+    <div class="acc-modal-card">
+      <div class="form-header">
+        <h4>Chọn tài khoản để gen</h4>
+        <button type="button" id="acc-modal-close" class="icon-btn-close">✕</button>
+      </div>
+      <p class="acc-modal-note">
+        Cả lượt gen chạy trên <b>1 tài khoản, trong 1 phiên chat</b> để bộ mockup
+        đồng nhất design.
+      </p>
+      <div id="acc-modal-list" class="acc-pick-list"></div>
+      <div class="form-actions">
+        <button type="button" id="acc-modal-cancel" class="btn ghost sm">Huỷ</button>
+        <button type="button" id="acc-modal-go" class="btn primary sm">Bắt đầu gen</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lightbox-modal" class="lightbox-modal" hidden>
+    <div class="lightbox-backdrop"></div>
+    <div class="lightbox-content">
+      <button class="lightbox-close" id="lightbox-close" title="Đóng">✕</button>
+      <div class="lightbox-img-wrap">
+        <img id="lightbox-img" src="" alt="Preview">
+      </div>
+      <div class="lightbox-info">
+        <span id="lightbox-caption" class="lightbox-caption"></span>
+        <a id="lightbox-download" class="btn primary sm" href="#" download>Tải ảnh về</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST CONTAINER -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js?v=29"></script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+.chrome-profiles/
+.chrome-profile*/
+data/templates/
+data/outputs/
+data/state.json
+__pycache__/
+*.pyc
+.idea/
+inspect*.png
+debug*.png

@@ -1,0 +1,6 @@
+fastapi
+uvicorn[standard]
+playwright
+pillow
+pyyaml
+python-multipart
