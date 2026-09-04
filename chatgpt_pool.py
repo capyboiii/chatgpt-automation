@@ -258,15 +258,18 @@ class _ImageNet:
                 return                       # thumbnail / icon
         elif len(data) < MIN_IMG_BYTES:      # không có Pillow thì đành đoán theo KB
             return
-        if hashlib.sha256(data).hexdigest() in self._ignore:
+        digest = hashlib.sha256(data).hexdigest()
+        if digest in self._ignore:
             log.debug("Bỏ qua ảnh template mình vừa upload: %s", response.url[:80])
             return
-        key = response.url.split("?", 1)[0]
-        old = self._shots.get(key)
-        if old is None:
-            self._shots[key] = _Shot(response.url, data, seq, w, h)
-        elif old.data is None or len(data) > len(old.data):
-            old.data, old.url, old.w, old.h = data, response.url, w, h   # giữ ts đầu
+        # Gom theo NỘI DUNG ảnh, không theo URL. Gom theo URL (bỏ query) thì nếu
+        # ChatGPT trả mọi ảnh qua cùng một đường dẫn (chỉ khác ?file_id=...) là cả
+        # loạt ảnh khác nhau bị nhập làm một -> "gen 3 ảnh mà chỉ lấy được 1".
+        if digest in self._shots:
+            return                          # đúng ảnh đó, tải lại lần nữa thôi
+        self._shots[digest] = _Shot(response.url, data, seq, w, h)
+        log.debug("Bắt được ảnh %dx%d (%.0f KB) %s",
+                  w, h, len(data) / 1024, response.url[:90])
 
 
 UpdateCb = Callable[[dict], Awaitable[None] | None]
@@ -779,9 +782,16 @@ class ChatGPTPool:
                     except QuotaExceeded as e:
                         raise QuotaExceeded(str(e), got) from None   # giữ ảnh đã có
                     next_diag = now + 8
-                if now - quiet_since > 30:
+                # Chưa đủ ảnh mà đã im: ChatGPT hay gen từng ảnh một, giữa các ảnh
+                # có quãng nghỉ. Có ảnh rồi thì chờ rộng tay hơn trước khi bỏ cuộc.
+                quiet_limit = 75 if got else 30
+                if now - quiet_since > quiet_limit:
                     if got:      # trả thiếu nhưng có còn hơn không
-                        log.warning("ChatGPT chỉ trả %d/%d ảnh.", len(got), want)
+                        log.warning("ChatGPT chỉ trả %d/%d ảnh sau %ds im lặng. "
+                                    "Ảnh bắt được: %s", len(got), want, quiet_limit,
+                                    "; ".join(f"{sh.w}x{sh.h} "
+                                              f"{len(sh.data or b'') // 1024}KB "
+                                              f"{sh.url[-60:]}" for sh in got))
                         return trim(await self._order_shots(page, got))
                     raise NoImage("ChatGPT trả lời xong nhưng không có ảnh")
             await page.wait_for_timeout(1_500)

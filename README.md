@@ -43,7 +43,9 @@ ChatGPT bày kết quả thành 1 ảnh lớn + mấy thumbnail nhỏ (kèm `src
 lọc theo kích thước hiển thị là sót ảnh ngay. Tool nghe thẳng `page.on("response")`:
 response ảnh phản ánh đúng số ảnh gen ra và mang sẵn bytes gốc — khỏi fetch lại URL đã
 ký. Thumbnail/icon bị loại bằng **kích thước thật** (Pillow, cạnh ngắn ≥ 400px); một
-ảnh tải về nhiều lần thì gom theo URL (bỏ query) và giữ bản nặng nhất.
+ảnh tải về nhiều lần thì gom theo **nội dung ảnh** (hash bytes) chứ không theo URL —
+ChatGPT có thể phục vụ mọi ảnh qua cùng một đường dẫn, gom theo URL là cả loạt ảnh
+khác nhau bị nhập làm một.
 
 Hai lớp chặn để không nhận nhầm chính ảnh mình gửi lên (ChatGPT tải template về để
 hiển thị trong tin nhắn, cũng là response ảnh to như thật): **hash SHA-256** của các
