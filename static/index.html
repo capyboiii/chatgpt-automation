@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=38">
+  <link rel="stylesheet" href="style.css?v=42">
 </head>
 <body>
   <!-- Ambient backdrop glows -->
@@ -82,22 +82,15 @@
           </span>
         </div>
 
-        <button type="button" id="toggle-profiles-view" class="btn primary-subtle sm">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-          <span id="profiles-toggle-text">Thêm tài khoản</span>
+        <button type="button" id="open-bulk-login" class="btn primary-subtle sm"
+                title="Dán nhiều tài khoản, tool tự đăng nhập lần lượt">
+          ⚡ Đăng nhập hàng loạt
         </button>
+
       </div>
 
       <div id="profiles-collapsible" class="profiles-collapsible">
         <div id="profiles-list" class="profiles-grid"></div>
-
-        <form id="add-profile" class="add-profile-bar" hidden>
-          <div class="input-with-icon">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-            <input type="text" id="ap-name" placeholder="Đặt tên profile (ví dụ: acc1, acc2...)" required autocomplete="off">
-          </div>
-          <button type="submit" class="btn primary sm">Lưu tài khoản</button>
-        </form>
       </div>
     </section>
 
@@ -341,6 +334,48 @@
   </div>
 
   <!-- LIGHTBOX MODAL -->
+  <!-- ĐĂNG NHẬP HÀNG LOẠT -->
+  <div id="bulk-modal" class="acc-modal" hidden>
+    <div class="acc-modal-backdrop"></div>
+    <div class="acc-modal-card" style="width:min(560px,94vw)">
+      <div class="form-header">
+        <h4>Đăng nhập hàng loạt</h4>
+        <button type="button" id="bm-close" class="icon-btn-close">✕</button>
+      </div>
+      <p class="acc-modal-note">Mỗi dòng: <code>email | mật khẩu | mã 2FA</code></p>
+      <div class="form-group">
+        <textarea id="bm-creds" rows="7" spellcheck="false"
+                  placeholder="a@gmail.com|MatKhau1@|SEED2FA...&#10;b@gmail.com|MatKhau2@|SEED2FA..."></textarea>
+      </div>
+      <div id="bm-list" class="bulk-list" hidden></div>
+      <div class="form-actions">
+        <button type="button" id="bm-cancel" class="btn ghost sm">Đóng</button>
+        <button type="button" id="bm-go" class="btn primary sm">Đăng nhập tất cả</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ĐĂNG NHẬP TỰ ĐỘNG -->
+  <div id="login-modal" class="acc-modal" hidden>
+    <div class="acc-modal-backdrop"></div>
+    <div class="acc-modal-card">
+      <div class="form-header">
+        <h4>Đăng nhập <span id="lm-profile"></span></h4>
+        <button type="button" id="lm-close" class="icon-btn-close">✕</button>
+      </div>
+      <p class="acc-modal-note"><code>email | mật khẩu | mã 2FA</code></p>
+      <div class="form-group">
+        <textarea id="lm-creds" rows="2" spellcheck="false"
+                  placeholder="email@gmail.com | matkhau | XSMX...RNKV"></textarea>
+      </div>
+      <p class="acc-modal-note" id="lm-status" hidden></p>
+      <div class="form-actions">
+        <button type="button" id="lm-manual" class="btn ghost sm">Tự đăng nhập</button>
+        <button type="button" id="lm-go" class="btn primary sm">Đăng nhập tự động</button>
+      </div>
+    </div>
+  </div>
+
   <!-- CHỌN TÀI KHOẢN TRƯỚC KHI GEN -->
   <div id="acc-modal" class="acc-modal" hidden>
     <div class="acc-modal-backdrop"></div>
@@ -378,6 +413,6 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=38"></script>
+  <script src="app.js?v=42"></script>
 </body>
 </html>

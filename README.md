@@ -25,6 +25,28 @@ run:
   batch_size: 6         # số ảnh đính kèm mỗi tin nhắn
 ```
 
+### Chạy song song tới đâu
+**1 tab / 1 tài khoản** (`browser.tabs_per_account: 1`): mỗi tài khoản chạy đúng một
+collection tại một thời điểm, song song diễn ra ở mức tài khoản. Tăng số tab thì nhanh
+hơn nhưng đốt lượt của tài khoản đó nhanh tương ứng và dễ bị ChatGPT chặn, nên để 1.
+
+Bộ điều phối là **động**: tài khoản chọn thêm giữa lượt (hoặc dự bị được gọi vào) có
+worker trong vòng nửa giây, không phải chờ đội hình cũ nghỉ. Sau khi hết việc, pool
+nán lại `run.idle_exit_seconds` (mặc định 90s) với Chrome vẫn mở, nên lượt gen kế
+tiếp trong khoảng đó dùng lại luôn, khỏi tốn 10-30s bật lại cả đội.
+
+### Hết lượt thì chuyển tài khoản
+Tài khoản nào bị ChatGPT chặn vì hết lượt tạo ảnh sẽ bị đánh dấu và **ngừng nhận
+việc**. Collection đang dở của nó quay lại hàng đợi để tài khoản khác trong đội hình
+nhặt — nếu mọi tài khoản đang bận thì nó xếp hàng chờ. Khi cả đội hình đã chọn đều
+hết lượt, pool tự **gọi tài khoản dự bị** (những tài khoản còn lại trong `config.yaml`
+mà bạn không tích chọn) vào chạy tiếp. Hết sạch cả dự bị mới báo lỗi.
+
+Collection chuyển sang tài khoản khác sẽ được **gen lại từ đầu**, vì chat cũ nằm ở
+tài khoản cũ — ghép ảnh của hai chat vào một bộ là mất tính đồng nhất. Muốn giữ ảnh
+đã có (nhanh hơn, đổi lại bộ ảnh pha hai hướng design) thì bật
+`run.resume_partial_on_other_account: true`.
+
 ### Vì sao cả lượt đi trong 1 chat
 Mỗi cuộc hội thoại ChatGPT cho ra một hướng design khác nhau, nên chia ảnh ra nhiều
 chat / nhiều tab thì **bộ mockup không đồng nhất**. Cả lượt vì thế đi trong **một

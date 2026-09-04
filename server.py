@@ -20,6 +20,7 @@ from fastapi import FastAPI, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+import auth_login
 from chatgpt_pool import ChatGPTPool
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -167,7 +168,17 @@ async def _run_pool(jobs: list[dict] | None = None,
     global ACTIVE_POOL, ACTIVE_LOOP
     cfg = load_cfg()
     profs = profiles or ["acc1"]
-    cfg.setdefault("browser", {})["profiles"] = [{"name": p, "tabs": 1} for p in profs]
+    # MẶC ĐỊNH 1 TAB / 1 TÀI KHOẢN. Mở nhiều tab trên cùng một tài khoản thì nhanh
+    # hơn nhưng đốt lượt của tài khoản đó nhanh tương ứng, và ChatGPT dễ chặn bớt
+    # khi một tài khoản gen nhiều thứ cùng lúc. Song song vẫn diễn ra ở mức TÀI
+    # KHOẢN: mỗi tài khoản một collection.
+    tabs = max(1, int(cfg.get("browser", {}).get("tabs_per_account", 1)))
+    cfg.setdefault("browser", {})["profiles"] = [{"name": p, "tabs": tabs}
+                                                 for p in profs]
+    # Tài khoản còn lại trong config = quân dự bị. Đội hình chính hết lượt thì pool
+    # tự kéo mấy tài khoản này vào chạy tiếp thay vì bỏ dở collection.
+    cfg["browser"]["reserves"] = [p["name"] for p in _get_profiles()
+                                  if p["name"] not in profs]
     RUN["active"] = True
     RUN["started"] = time.time()
     RUN["profiles"] = profs
@@ -244,9 +255,10 @@ def _safe_folder_name(name: str) -> str:
     return cleaned
 
 
-async def _enqueue_on_pool(pool, cols: list[dict]) -> bool:
+async def _enqueue_on_pool(pool, cols: list[dict],
+                           profiles: list[str] | None = None) -> bool:
     """Gọi enqueue trong loop của pool (asyncio.Queue không an toàn liên thread)."""
-    return pool.enqueue_collections(cols)
+    return pool.enqueue_collections(cols, profiles)
 
 
 @app.post("/api/generate")
@@ -439,7 +451,8 @@ async def generate_collections(payload: dict):
         # chế độ đơn lẻ, hoặc vừa kết thúc). Trước đây cứ bắn đi rồi báo "đã xếp
         # hàng" -> collection rơi vào hư không mà UI vẫn hiện chờ mãi.
         fut = asyncio.run_coroutine_threadsafe(
-            _enqueue_on_pool(ACTIVE_POOL, built_collections), ACTIVE_LOOP)
+            _enqueue_on_pool(ACTIVE_POOL, built_collections, valid_profiles),
+            ACTIVE_LOOP)
         try:
             accepted = fut.result(timeout=10)
         except Exception as e:  # noqa: BLE001
@@ -616,52 +629,75 @@ def _save_profiles(profs: list[dict]) -> None:
         yaml.dump(cfg, allow_unicode=True, sort_keys=False), encoding="utf-8")
 
 
-LOGIN: dict[str, dict] = {}   # name -> {stop, thread, logged_in, error}
+LOGIN: dict[str, dict] = {}        # name -> {stop, thread, logged_in, error, phase}
+LAST_LOGIN: dict[str, dict] = {}   # name -> kết quả lần đăng nhập gần nhất
+
+
+# Đo trên chính profile của tool (2026-09), thử đủ mọi tín hiệu:
+#
+#   tín hiệu                     | chưa đăng nhập | ĐÃ đăng nhập
+#   -----------------------------|----------------|-------------
+#   <textarea>, <nav> hiển thị   | CÓ             | có     -> vô dụng
+#   cookie oai-did               | CÓ             | có     -> vô dụng
+#   cookie *session-token*       | không          | KHÔNG  -> ChatGPT bỏ rồi
+#   /api/auth/session            | WARNING_BANNER | y hệt  -> vô dụng
+#   /backend-api/me              | 200, email rỗng| 200, email RỖNG -> vô dụng
+#   nút "Log in"/"Sign up"       | CÒN            | mất    -> ĐÂY
+#
+# `/backend-api/me` gọi ngoài ngữ cảnh trang chỉ trả hồ sơ ẩn danh, nên đừng tin.
+# Dấu hiệu chắc chắn là giao diện: còn nút mời đăng nhập nghĩa là chưa đăng nhập.
+LOGIN_STATE_JS = """() => {
+    const vis = (el) => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+    };
+    const txts = [...document.querySelectorAll('button,a')].filter(vis)
+        .map((b) => (b.innerText || '').trim().toLowerCase());
+    const hasLoginBtn = txts.some(
+        (t) => /^(log in|sign up|đăng nhập|đăng ký)/.test(t));
+    // trang đã dựng xong chưa (đừng kết luận khi còn trắng)
+    const appReady =
+        !!document.querySelector('#prompt-textarea, div.ProseMirror[contenteditable="true"]')
+        || document.querySelectorAll('a[href^="/c/"]').length > 0;
+    return {hasLoginBtn, appReady};
+}"""
 
 
 def _check_logged_in(page) -> bool:
-    """Kiểm tra toàn diện xem trang ChatGPT đã đăng nhập thành công hay chưa."""
-    try:
-        url = page.url.lower()
-        if "auth.openai.com" in url or "auth0" in url:
-            return False
-        
-        # 1. Kiểm tra các selector giao diện ChatGPT đã đăng nhập
-        selectors = [
-            "#prompt-textarea",
-            "div[contenteditable='true']",
-            "textarea[data-id='root']",
-            "textarea",
-            "button[data-testid='send-button']",
-            "button[data-testid='profile-button']",
-            "button[aria-label*='User']",
-            "button[aria-label*='Hồ sơ']",
-            "nav"
-        ]
-        for sel in selectors:
-            try:
-                if page.locator(sel).first.is_visible():
-                    return True
-            except Exception:
-                pass
-        
-        # 2. Kiểm tra cookies phiên đăng nhập
-        try:
-            cookies = page.context.cookies()
-            for c in cookies:
-                cname = c.get("name", "").lower()
-                if "session-token" in cname or "oai-did" in cname or "__secure-next-auth" in cname:
-                    if c.get("value"):
-                        return True
-        except Exception:
-            pass
+    """Đã đăng nhập THẬT hay chưa (xem bảng đo ở trên).
 
-        # 3. Fallback kiểm tra URL chính thức
-        if "chatgpt.com" in url and "/login" not in url and "/auth" not in url:
-            return True
-    except Exception:
-        pass
-    return False
+    LƯU Ý: phải chạy ở chế độ hiện cửa sổ. Chạy headless thì Cloudflare trả về
+    giao diện khách vãng lai kể cả khi profile có phiên hợp lệ - đo thế nào cũng
+    ra "chưa đăng nhập".
+    """
+    try:
+        if "auth.openai.com" in (page.url or "").lower():
+            return False
+        st = page.evaluate(LOGIN_STATE_JS)
+        return bool(st.get("appReady")) and not st.get("hasLoginBtn")
+    except Exception:  # noqa: BLE001
+        return False
+
+
+LOGIN_DEBUG = ROOT / "data" / "login-debug"
+
+
+def _save_login_debug(name: str, snap: dict | None) -> None:
+    """Ghi cấu trúc trang lúc đăng nhập hỏng, để sửa selector khỏi phải mò.
+
+    Chỉ có siêu dữ liệu ô nhập và chữ trên nút - `auth_login.snapshot` không đọc
+    `value` nên mật khẩu/mã 2FA không thể lọt vào đây.
+    """
+    if not snap:
+        return
+    try:
+        LOGIN_DEBUG.mkdir(parents=True, exist_ok=True)
+        f = LOGIN_DEBUG / f"{name}-{int(time.time())}.json"
+        f.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+        log.warning("Đã lưu cấu trúc trang lúc hỏng vào %s - gửi file này là sửa "
+                    "được selector.", f)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Không lưu được ảnh chụp trang: %s", e)
 
 
 def _login_worker(name: str, udir: Path, box: dict):
@@ -677,6 +713,27 @@ def _login_worker(name: str, udir: Path, box: dict):
                       "--no-first-run", "--no-default-browser-check"])
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
             page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=90_000)
+
+            # Lấy credential ra rồi XOÁ khỏi box ngay: box còn bị API status đọc tới.
+            creds = box.pop("creds", None)
+            if creds:
+                ok = auth_login.auto_login(page, creds, box, _check_logged_in)
+                creds = None                   # bỏ tham chiếu càng sớm càng tốt
+                box["logged_in"] = ok
+                if ok:
+                    log.info("[%s] Đăng nhập tự động thành công.", name)
+                    LAST_LOGIN[name] = {"logged_in": True, "error": None,
+                                        "needs_human": False, "phase": "done"}
+                    ctx.close()
+                    return                     # xong thì tự đóng, khỏi bấm "Xong"
+                # Đánh dấu để UI biết mà hiện lỗi + nút "Tôi đã đăng nhập xong".
+                # Thiếu cờ này thì worker nằm chờ stop.wait() còn UI vẫn quay -> treo.
+                box["phase"] = "failed"
+                log.warning("[%s] Đăng nhập tự động chưa xong (%s) - để cửa sổ mở "
+                            "cho bạn làm nốt.", name,
+                            box.get("error") or "đang chờ bạn xác minh")
+                _save_login_debug(name, box.pop("snapshot", None))
+
             box["stop"].wait()                 # chờ UI bấm "Tôi đã đăng nhập xong"
             time.sleep(1.0)
             box["logged_in"] = _check_logged_in(page)
@@ -684,6 +741,10 @@ def _login_worker(name: str, udir: Path, box: dict):
     except Exception as e:  # noqa: BLE001
         box["error"] = str(e)
     finally:
+        LAST_LOGIN[name] = {"logged_in": box.get("logged_in"),
+                            "error": box.get("error"),
+                            "needs_human": box.get("needs_human", False),
+                            "phase": box.get("phase", "done")}
         LOGIN.pop(name, None)
 
 
@@ -693,23 +754,11 @@ def api_profiles():
     out = []
     for p in _get_profiles():
         out.append({"name": p["name"], "tabs": int(p.get("tabs", 1)),
+                    "email": p.get("email"),          # chỉ email, không có mật khẩu
                     "exists": (base / p["name"]).exists(),
                     "login_open": p["name"] in LOGIN})
     total = sum(p["tabs"] for p in out)
     return {"profiles": out, "total_tabs": total}
-
-
-@app.post("/api/profiles")
-def add_profile(payload: dict):
-    name = (payload.get("name") or "").strip()
-    if not name:
-        raise HTTPException(400, "Thiếu tên profile")
-    profs = _get_profiles()
-    if any(p["name"] == name for p in profs):
-        raise HTTPException(409, "Tên profile đã tồn tại")
-    profs.append({"name": name, "tabs": 1})   # 1 lượt gen = 1 tab, giữ field cho tương thích
-    _save_profiles(profs)
-    return {"ok": True}
 
 
 def _profile_dir_of(name: str) -> Path | None:
@@ -771,18 +820,175 @@ def delete_profile(name: str):
     return {"ok": True, "dir_removed": removed}
 
 
+# =============================================================== đăng nhập hàng loạt
+BULK = {"active": False, "items": [], "started": 0}
+
+
+def _next_profile_name(taken: set[str]) -> str:
+    i = 1
+    while f"acc{i}" in taken:
+        i += 1
+    return f"acc{i}"
+
+
+def _bulk_worker(jobs: list[tuple[str, dict]]):
+    """Đăng nhập LẦN LƯỢT từng tài khoản.
+
+    Cố tình không chạy song song: mỗi lượt mở một cửa sổ Chrome thật, bật một loạt
+    cùng lúc vừa nặng máy vừa giống hệt hành vi bị OpenAI gắn cờ.
+    """
+    from playwright.sync_api import sync_playwright
+
+    for idx, (name, creds) in enumerate(jobs):
+        item = BULK["items"][idx]
+        item["status"] = "running"
+        udir = _profiles_dir() / name
+        udir.mkdir(parents=True, exist_ok=True)
+        box = {"phase": "starting", "needs_human": False, "error": None}
+        try:
+            with sync_playwright() as pw:
+                ctx = pw.chromium.launch_persistent_context(
+                    user_data_dir=str(udir), headless=False, channel="chrome",
+                    viewport={"width": 1400, "height": 950},
+                    args=["--disable-blink-features=AutomationControlled",
+                          "--no-first-run", "--no-default-browser-check"])
+                page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                page.goto("https://chatgpt.com/", wait_until="domcontentloaded",
+                          timeout=90_000)
+                ok = auth_login.auto_login(page, creds, box, _check_logged_in)
+                if ok:
+                    profs = _get_profiles()
+                    if not any(x["name"] == name for x in profs):
+                        profs.append({"name": name, "tabs": 1,
+                                      "email": creds["email"]})
+                        _save_profiles(profs)
+                    item["status"] = "done"
+                    log.info("[%s] Đăng nhập tự động thành công (%s).",
+                             name, creds["email"])
+                else:
+                    item["status"] = "needs_human" if box.get("needs_human") else "failed"
+                    item["error"] = box.get("error") or "Cần bạn xác minh thủ công"
+                    _save_login_debug(name, box.pop("snapshot", None))
+                ctx.close()
+        except Exception as e:  # noqa: BLE001
+            item["status"] = "failed"
+            item["error"] = str(e)[:200]
+            log.warning("[%s] Đăng nhập hàng loạt lỗi: %s", name, e)
+        finally:
+            creds.clear()          # xoá mật khẩu khỏi RAM ngay khi dùng xong
+            jobs[idx] = (name, {})
+        time.sleep(2)
+
+    BULK["active"] = False
+    done = sum(1 for x in BULK["items"] if x["status"] == "done")
+    log.info("Đăng nhập hàng loạt xong: %d/%d tài khoản.", done, len(BULK["items"]))
+
+
+@app.post("/api/profiles/bulk-login")
+def bulk_login(payload: dict):
+    """Dán nhiều dòng `email|mật khẩu|seed2fa`, mỗi dòng một tài khoản.
+
+    Tự đặt tên profile (accN) và tự thêm vào config khi đăng nhập xong. Mật khẩu
+    chỉ nằm trong RAM của lượt chạy: không ghi đĩa, không ghi log, không trả về API.
+    """
+    if BULK["active"]:
+        raise HTTPException(409, "Đang chạy một lượt đăng nhập hàng loạt khác.")
+    if LOGIN:
+        raise HTTPException(409, "Đang có cửa sổ đăng nhập mở, đóng nó trước đã.")
+
+    raw = (payload or {}).get("creds") or ""
+    profs = _get_profiles()
+    by_email = {(p.get("email") or "").lower(): p["name"] for p in profs}
+    taken = {p["name"] for p in profs} | {d.name for d in _profiles_dir().glob("*")
+                                          if d.is_dir()}
+    jobs, items, seen, bad = [], [], set(), []
+    for lineno, line in enumerate(raw.splitlines(), 1):
+        if not line.strip():
+            continue
+        creds = auth_login.parse_creds(line)
+        if not creds:
+            bad.append(f"dòng {lineno}")
+            continue
+        if not auth_login.check_totp_seed(creds["totp"]):
+            bad.append(f"dòng {lineno} (mã 2FA sai)")
+            continue
+        email = creds["email"].lower()
+        if email in seen:
+            continue                       # dán trùng trong cùng một lần
+        seen.add(email)
+        name = by_email.get(email)         # đã có tài khoản này -> đăng nhập lại
+        if not name:
+            name = _next_profile_name(taken)
+            taken.add(name)
+        jobs.append((name, creds))
+        items.append({"profile": name, "email": creds["email"],
+                      "status": "pending", "error": None})
+
+    if bad and not jobs:
+        raise HTTPException(400, "Không dòng nào hợp lệ: " + ", ".join(bad))
+    if not jobs:
+        raise HTTPException(400, "Chưa dán tài khoản nào.")
+
+    BULK.update({"active": True, "items": items, "started": time.time()})
+    threading.Thread(target=_bulk_worker, args=(jobs,), daemon=True).start()
+    return {"started": len(jobs), "skipped": bad, "items": items}
+
+
+@app.get("/api/profiles/bulk-login/status")
+def bulk_login_status():
+    return {"active": BULK["active"], "items": BULK["items"]}
+
+
 @app.post("/api/profiles/{name}/login")
-def profile_login(name: str):
+def profile_login(name: str, payload: dict | None = None):
+    """Mở cửa sổ đăng nhập.
+
+    Không có `creds` -> y như cũ: bạn tự đăng nhập rồi bấm "Xong".
+    Có `creds` ("email | mật khẩu | seed2fa") -> tool tự điền. Chuỗi này chỉ nằm
+    trong RAM của lần chạy đó: không ghi đĩa, không ghi log, không trả về qua API.
+    """
     if name in LOGIN:
         return {"opened": True, "already": True}
     udir = _profiles_dir() / name
     udir.mkdir(parents=True, exist_ok=True)
-    box = {"stop": threading.Event(), "logged_in": None, "error": None}
+    box = {"stop": threading.Event(), "logged_in": None, "error": None,
+           "needs_human": False, "phase": "starting"}
+
+    raw = (payload or {}).get("creds") or ""
+    auto = False
+    if raw.strip():
+        creds = auth_login.parse_creds(raw)
+        if not creds:
+            raise HTTPException(
+                400, "Sai định dạng. Cần: email | mật khẩu | mã bí mật 2FA "
+                     "(phần 2FA có thể bỏ trống).")
+        if not auth_login.check_totp_seed(creds["totp"]):
+            raise HTTPException(400, "Mã bí mật 2FA không hợp lệ (phải là chuỗi base32).")
+        box["creds"] = creds
+        box["email"] = creds["email"]      # chỉ email được phép hiện lại trên UI
+        auto = True
+
     t = threading.Thread(target=_login_worker, args=(name, udir, box), daemon=True)
     box["thread"] = t
+    LAST_LOGIN.pop(name, None)
     LOGIN[name] = box
     t.start()
-    return {"opened": True}
+    return {"opened": True, "auto": auto}
+
+
+@app.get("/api/profiles/{name}/login/status")
+def profile_login_status(name: str):
+    """UI hỏi tiến độ đăng nhập tự động. Không bao giờ trả mật khẩu/seed."""
+    box = LOGIN.get(name)
+    if box:
+        return {"open": True, "phase": box.get("phase"),
+                "needs_human": box.get("needs_human", False),
+                "logged_in": box.get("logged_in"), "error": box.get("error"),
+                "email": box.get("email")}
+    done = LAST_LOGIN.get(name)
+    if done:
+        return {"open": False, **done}
+    return {"open": False, "phase": None, "logged_in": None, "error": None}
 
 
 @app.post("/api/profiles/{name}/login/close")
@@ -805,7 +1011,8 @@ def check_profile_login(name: str):
     try:
         with sync_playwright() as pw:
             ctx = pw.chromium.launch_persistent_context(
-                user_data_dir=str(udir), headless=True, channel="chrome",
+                # KHÔNG headless: xem chú thích ở _check_logged_in
+                user_data_dir=str(udir), headless=False, channel="chrome",
                 viewport={"width": 1280, "height": 800},
                 args=["--disable-blink-features=AutomationControlled",
                       "--no-first-run", "--no-default-browser-check"]

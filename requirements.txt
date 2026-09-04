@@ -4,3 +4,4 @@ playwright
 pillow
 pyyaml
 python-multipart
+pyotp

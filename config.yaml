@@ -4,14 +4,23 @@ browser:
   profiles:
   - name: acc1
     tabs: 1
+    email: nguyenthuong17933@gmail.com
   - name: acc2
     tabs: 1
+    email: yenyeusung@gmail.com
+  - name: acc3
+    tabs: 1
+    email: russobranham5854+1@gmail.com
+  - name: acc4
+    tabs: 1
+    email: ethane.subway.4v+5ue8k0g@icloud.com
+  - name: acc5
+    tabs: 1
+    email: hoffmannbremer574@googlemail.com
+  tabs_per_account: 1
   generation_timeout: 300
   nav_timeout: 90
 run:
   max_retries: 3
   batch_size: 6
-  # đủ ảnh rồi vẫn chờ ngần này giây thấy danh sách ảnh
-  # đứng yên mới chốt (ChatGPT hay vẽ lại 1 ảnh ở phút chót)
   settle_seconds: 8
-

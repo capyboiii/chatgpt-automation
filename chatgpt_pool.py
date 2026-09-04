@@ -168,8 +168,23 @@ TEMP_ERR_PAT = (
 
 # Ảnh mockup thật thì to; thumbnail/icon thì không. Ưu tiên đo bằng kích thước
 # thật (Pillow); MIN_IMG_BYTES chỉ là phương án chống cháy khi thiếu Pillow.
-MIN_IMG_SIDE = 400
+#
+# 768: ảnh ChatGPT gen ra đo được là 1024 / 1155 / 1254 / 2000 px. Ngưỡng cũ 400
+# cho lọt ảnh nền giao diện 512x512 -> tài khoản nào không gen được ảnh là tool
+# lưu nhầm chính ảnh nền đó làm kết quả.
+MIN_IMG_SIDE = 768
 MIN_IMG_BYTES = 20_000
+
+# Ảnh của GIAO DIỆN nằm trên CDN tĩnh, ảnh gen nằm ở host nội dung người dùng.
+# Thủ phạm bắt được: chatgpt.com/cdn/assets/noise-watercolor-*.webp (512x512, 32KB).
+UI_ASSET_PARTS = ("/cdn/assets/", "/cdn-cgi/", "/static/", "/_next/", "/icons/",
+                  "/sprites", "/fonts/")
+
+
+def _is_ui_asset(url: str) -> bool:
+    """Ảnh trang trí của giao diện, không phải ảnh ChatGPT tạo ra."""
+    path = url.split("?", 1)[0].lower()
+    return any(part in path for part in UI_ASSET_PARTS)
 
 
 class _Shot:
@@ -231,6 +246,8 @@ class _ImageNet:
             return
         low = response.url.lower()
         if any(k in low for k in ("/avatar", "favicon", "sprite", "logo")):
+            return
+        if _is_ui_asset(response.url):
             return
         # Số thứ tự phải lấy NGAY ĐÂY, theo thứ tự response về. Nếu lấy mốc thời
         # gian lúc đọc xong body thì mấy body tải song song sẽ về không theo thứ tự
@@ -355,6 +372,11 @@ class ChatGPTPool:
         self.headless = bool(b.get("headless", False))
         self.profiles_dir = Path(b.get("profiles_dir", "./.chrome-profiles")).resolve()
         self.profiles = b.get("profiles") or [{"name": "acc1", "tabs": 1}]
+        # Tài khoản đã đăng nhập nhưng KHÔNG được chọn cho lượt này. Khi cả đội
+        # hình chính hết lượt, pool gọi dự bị vào thay thay vì bỏ dở collection.
+        self.reserves: list[str] = list(b.get("reserves") or [])
+        # số tab mỗi tài khoản (mặc định 1); dùng khi gọi dự bị hoặc thêm tài khoản
+        self.tabs_per_account = max(1, int(b.get("tabs_per_account", 1)))
         self.gen_timeout = int(b.get("generation_timeout", 300))
         self.nav_timeout = int(b.get("nav_timeout", 90)) * 1000
         # giãn cách nhỏ giữa các lần bật Chrome: bật cùng lúc cả chục cửa sổ dễ
@@ -393,9 +415,13 @@ class ChatGPTPool:
         self.resume_partial = bool(r.get("resume_partial_on_other_account", False))
         # Sau khi hết việc, pool nán lại chừng này giây (Chrome vẫn mở) để còn nhận
         # collection nạp thêm từ UI mà không phải bật lại trình duyệt.
-        self.idle_exit = float(r.get("idle_exit_seconds", 25))
+        # Nán lại lâu hơn để lượt gen kế tiếp DÙNG LẠI Chrome đang mở thay vì bật
+        # lại từ đầu (mỗi lần bật tốn 10-30s cho cả đội hình).
+        self.idle_exit = float(r.get("idle_exit_seconds", 90))
         # đủ ảnh rồi vẫn phải thấy danh sách ảnh đứng yên chừng này giây mới chốt
-        self.settle_seconds = float(r.get("settle_seconds", 8))
+        # 5s: đủ để bắt cú "ChatGPT vẽ lại ảnh ở phút chót" (lần nào cũng mất hơn
+        # 20s mới ra ảnh thay), mà không bắt mỗi tin nhắn phải đứng chờ 8 giây.
+        self.settle_seconds = float(r.get("settle_seconds", 5))
 
     # ---------------- lifecycle ----------------
     async def __aenter__(self) -> "ChatGPTPool":
@@ -459,6 +485,52 @@ class ChatGPTPool:
         await asyncio.gather(*(
             open_tab(s, first if i == 0 else None) for i, s in enumerate(slots)
         ))
+
+    def add_profiles(self, names: list[str]) -> int:
+        """Bổ sung tài khoản vào đội hình đang chạy (dùng khi UI chọn thêm acc).
+
+        Chỉ tạo slot + task boot; bộ điều phối trong `run_collections` thấy slot mới
+        là tự sinh worker trong vòng nửa giây, không phải chờ ai nghỉ.
+        """
+        added = 0
+        for name in names:
+            if not name or name in self.exhausted:
+                continue
+            if any(sl.profile == name for sl in self._slots):
+                continue
+            slots = [_Slot(name, i, len(self._slots) + i)
+                     for i in range(self.tabs_per_account)]
+            self._slots.extend(slots)
+            self._boot.append(asyncio.create_task(
+                self._boot_profile(name, slots, delay=0)))
+            self.reserves = [r for r in self.reserves if r != name]
+            added += len(slots)
+            log.info("Thêm tài khoản '%s' (%d tab) vào đội hình đang chạy.",
+                     name, len(slots))
+        return added
+
+    async def recruit_reserve(self) -> _Slot | None:
+        """Bật thêm 1 tài khoản dự bị và trả về slot của nó.
+
+        Dùng khi đội hình đang chạy hết lượt: thay vì để collection chết trong
+        hàng đợi, kéo một tài khoản rảnh đã đăng nhập vào chạy tiếp.
+        """
+        while self.reserves:
+            name = self.reserves.pop(0)
+            if name in self.exhausted or any(s.profile == name for s in self._slots):
+                continue
+            slots = [_Slot(name, i, len(self._slots) + i)
+                     for i in range(self.tabs_per_account)]
+            self._slots.extend(slots)
+            log.info("Gọi tài khoản dự bị '%s' (%d tab) vào thay.",
+                     name, len(slots))
+            self._boot.append(asyncio.create_task(
+                self._boot_profile(name, slots, delay=0)))
+            page = await slots[0].wait_ready()
+            if page is not None:
+                return slots[0]
+            log.warning("Tài khoản dự bị '%s' không mở được: %s", name, slot.error)
+        return None
 
     async def __aexit__(self, *exc):
         for t in self._boot:
@@ -829,7 +901,7 @@ class ChatGPTPool:
                                               f"{sh.url[-60:]}" for sh in got))
                         return await self._finalize(page, got, want)
                     raise NoImage("ChatGPT trả lời xong nhưng không có ảnh")
-            await page.wait_for_timeout(1_500)
+            await page.wait_for_timeout(1_000)
 
         if got:
             log.warning("Hết giờ, mới có %d/%d ảnh.", len(got), want)
@@ -1032,32 +1104,26 @@ class ChatGPTPool:
 
     # ---------------- chạy 1 lượt đơn lẻ (tương thích ngược) ----------------
     async def run_batch(self, jobs: list[dict], on_update: UpdateCb = None) -> None:
-        """Gen cả lượt trong MỘT phiên chat của MỘT tài khoản."""
+        """Gen một lượt đơn lẻ.
+
+        Đi chung đường với `run_collections` (gói thành đúng 1 collection) để hưởng
+        luôn cơ chế hết lượt -> đẩy sang tài khoản khác / gọi tài khoản dự bị, thay
+        vì fail cả lượt như trước. `idle_exit=0`: xong là đóng ngay, không nán lại
+        chờ nạp thêm như chế độ collections.
+        """
         if not jobs:
             return
-        if not self._slots:
-            for j in jobs:
-                j["status"] = "failed"
-                j["error"] = "Chưa chọn tài khoản nào"
-            return
-        slot = self._slots[0]
-        page = await slot.wait_ready()
-        if page is None:
-            for j in jobs:
-                j["status"] = "failed"
-                j["error"] = f"Không mở được Chrome cho '{slot.profile}': {slot.error}"
-            return
-        fake_col = {
-            "id": "single",
-            "name": "Single",
-            "prompt": jobs[0]["prompt"] if jobs else "",
-            "jobs": jobs,
-            "status": "running"
-        }
-        await self._run_collection_on_slot(slot, page, fake_col, on_update=on_update)
+        col = {"id": "single", "name": "Single", "status": "pending",
+               "prompt": jobs[0].get("prompt", ""), "jobs": jobs, "worker": None}
+        await self.run_collections([col], on_update=on_update, idle_exit=0)
 
-    def enqueue_collections(self, collections: list[dict]) -> bool:
-        """Nạp thêm collections vào hàng đợi đang chạy. False = không nạp được."""
+    def enqueue_collections(self, collections: list[dict],
+                            profiles: list[str] | None = None) -> bool:
+        """Nạp thêm collections vào hàng đợi đang chạy. False = không nạp được.
+
+        `profiles` là các tài khoản vừa được chọn ở lượt nạp này - tài khoản nào
+        chưa có trong đội hình thì bật thêm ngay để cùng gánh việc.
+        """
         if not collections:
             return False
         if not self.running_collections:
@@ -1068,6 +1134,8 @@ class ChatGPTPool:
             self._last_active_time = loop.time()
         except RuntimeError:
             pass
+        if profiles:
+            self.add_profiles(profiles)
         for col in collections:
             col["status"] = "pending"
             for j in col.get("jobs", []):
@@ -1081,7 +1149,8 @@ class ChatGPTPool:
         self,
         collections: list[dict],
         on_update: UpdateCb = None,
-        on_fleet_update: Callable[[str, dict], None] = None
+        on_fleet_update: Callable[[str, dict], None] = None,
+        idle_exit: float | None = None
     ) -> None:
         """Chạy danh sách Collections song song qua nhiều tài khoản ChatGPT (Worker Pool với Dynamic Queue)."""
         if not collections:
@@ -1096,6 +1165,7 @@ class ChatGPTPool:
             return
 
         loop = asyncio.get_running_loop()
+        idle_limit = self.idle_exit if idle_exit is None else idle_exit
         self.running_collections = True
         self._last_active_time = loop.time()
         for col in collections:
@@ -1137,7 +1207,7 @@ class ChatGPTPool:
                     col = await asyncio.wait_for(self.collection_queue.get(), timeout=1.5)
                 except asyncio.TimeoutError:
                     now = loop.time()
-                    if not busy_slots and (now - self._last_active_time > self.idle_exit):
+                    if not busy_slots and (now - self._last_active_time > idle_limit):
                         # Toàn bộ worker đều rảnh và đã quá 25s không có thêm collection nào -> hoàn tất
                         break
                     continue
@@ -1203,30 +1273,43 @@ class ChatGPTPool:
                     if on_fleet_update:
                         on_fleet_update(profile, {"status": "idle", "collection": None, "collection_name": None})
 
-        # Chạy đồng thời tất cả các slot / worker.
-        # Vòng while: các worker nghỉ sau 25s không việc, nhưng UI có thể nạp thêm
-        # collection ĐÚNG vào khoảnh khắc đó (server thấy RUN active nên vẫn gửi).
-        # Không chạy lại thì mớ collection ấy nằm chết trong hàng đợi.
+        # ĐIỀU PHỐI ĐỘNG: cứ thấy slot chưa có worker là tạo worker cho nó ngay.
+        # Trước đây dùng gather() cố định trên danh sách slot lúc bắt đầu, nên tab
+        # thêm vào giữa chừng (tài khoản mới chọn, hoặc dự bị được gọi) phải chờ
+        # TOÀN BỘ đội hình cũ nghỉ mới được chạy - phí cả phút chờ vô ích.
+        workers: dict[int, asyncio.Task] = {}
         while True:
-            await asyncio.gather(*(worker(s) for s in self._slots))
+            for sl in list(self._slots):
+                if id(sl) not in workers:
+                    workers[id(sl)] = asyncio.create_task(worker(sl))
+            await asyncio.sleep(0.5)
+            if not workers or not all(t.done() for t in workers.values()):
+                continue                    # còn worker đang chạy -> để yên
+
             left = self.collection_queue.qsize()
             if left == 0:
                 break
-            usable = [s for s in self._slots
-                      if s.page is not None and s.profile not in self.exhausted]
+            usable = [sl for sl in self._slots
+                      if sl.page is not None and sl.profile not in self.exhausted]
             if not usable:
-                break
-            log.warning("Còn %d collection vừa được nạp thêm - chạy tiếp.", left)
+                # Đội hình hết lượt/chết hết -> kéo tài khoản dự bị vào.
+                if await self.recruit_reserve() is None:
+                    break
+                log.warning("Còn %d collection - chạy tiếp bằng tài khoản dự bị.", left)
+            else:
+                log.warning("Còn %d collection vừa được nạp thêm - chạy tiếp.", left)
+            for sl in usable:               # cho mấy slot còn dùng được chạy lại
+                workers.pop(id(sl), None)
             self._last_active_time = loop.time()
-            if self.collection_queue.qsize() == left and not usable:
-                break                       # không ai xử lý được -> thoát, khỏi lặp vô hạn
 
+        await asyncio.gather(*workers.values(), return_exceptions=True)
         self.running_collections = False    # từ đây nạp thêm là bị từ chối thẳng
 
         # Còn collection chưa chạy: nói ĐÚNG lý do thay vì mặc định đổ cho hết lượt
         if not self.collection_queue.empty():
             if self._slots and all(s.profile in self.exhausted for s in self._slots):
-                reason = "Tất cả tài khoản ChatGPT đều đã hết lượt tạo ảnh."
+                reason = ("Tất cả tài khoản ChatGPT (kể cả dự bị) đều đã hết lượt "
+                          "tạo ảnh.")
             else:
                 reason = ("Không còn tài khoản nào chạy được "
                           "(tab lỗi hoặc chưa đăng nhập).")

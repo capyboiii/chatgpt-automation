@@ -8,3 +8,4 @@ __pycache__/
 .idea/
 inspect*.png
 debug*.png
+data/login-debug/

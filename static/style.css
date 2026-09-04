@@ -612,12 +612,32 @@ body {
   width: 100%;
 }
 
-.pcard-identity {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  flex-wrap: wrap;
+/* Hàng đầu KHÔNG xuống dòng: trước đây email dài đẩy badge rơi xuống dòng hai
+   làm các thẻ cao thấp lệch nhau. Email cho xuống hàng riêng, cắt bằng ellipsis. */
+.pcard-top {
+  flex-wrap: nowrap;
+}
+
+.pcard-top .pcard-name {
+  flex: 0 1 auto;
+}
+
+.pcard-top .pcard-status-pill,
+.pcard-top .icon-action {
+  flex-shrink: 0;
+}
+
+.pcard-top .icon-action {
+  margin-left: auto;
+}
+
+.pcard-email {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: -4px;
 }
 
 .status-dot {
@@ -2308,3 +2328,47 @@ body {
 }
 
 
+
+/* danh sách tiến độ đăng nhập hàng loạt */
+.bulk-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+}
+
+.bulk-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card);
+  font-size: 0.8rem;
+}
+
+.bulk-row .bulk-email {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bulk-row .bulk-prof { opacity: .6; font-size: .72rem; }
+
+.bulk-badge {
+  font-size: .7rem;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.bulk-badge.pending { color: var(--muted); background: rgba(148,163,184,.15); }
+.bulk-badge.running { color: #38bdf8; background: rgba(56,189,248,.14); }
+.bulk-badge.done { color: #34d399; background: rgba(52,211,153,.14); }
+.bulk-badge.failed { color: #f87171; background: rgba(248,113,113,.14); }
+.bulk-badge.needs_human { color: #fbbf24; background: rgba(251,191,36,.14); }

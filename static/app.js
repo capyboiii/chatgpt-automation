@@ -20,7 +20,6 @@ const state = {
   stagedQueue: [],
   fleet: {},
   runProfile: null,
-  showAddProfile: false,
 };
 
 // ---- Toast Notification ----
@@ -81,14 +80,6 @@ async function loadProfiles() {
 }
 
 // Toggle add profile form
-$("#toggle-profiles-view")?.addEventListener("click", () => {
-  state.showAddProfile = !state.showAddProfile;
-  const form = $("#add-profile");
-  const btnText = $("#profiles-toggle-text");
-  if (form) form.hidden = !state.showAddProfile;
-  if (btnText) btnText.textContent = state.showAddProfile ? "Thu gọn" : "Thêm tài khoản";
-});
-
 function renderProfiles() {
   const list = $("#profiles-list");
   if (!list) return;
@@ -106,24 +97,19 @@ function renderProfiles() {
     return `
       <div class="pcard" data-name="${esc(p.name)}">
         <div class="pcard-top">
-          <div class="pcard-identity">
-            <span class="status-dot ${statusDotClass}"></span>
-            <span class="pcard-name" title="${esc(p.name)}">${esc(p.name)}</span>
-            <span class="pcard-status-pill ${isLogging ? "warn" : (isOnline ? "online" : "")}">
-              ${isLogging ? "Đang mở Chrome" : (isOnline ? "Đã sẵn sàng" : "Chưa kết nối")}
-            </span>
-          </div>
-          <button class="icon-action danger" data-delp="${esc(p.name)}" title="Xoá tài khoản này">
+          <span class="status-dot ${statusDotClass}"></span>
+          <span class="pcard-name">${esc(p.name)}</span>
+          <span class="pcard-status-pill ${isLogging ? "warn" : (isOnline ? "online" : "")}">
+            ${isLogging ? "Đang mở" : (isOnline ? "Sẵn sàng" : "Chưa kết nối")}
+          </span>
+          <button class="icon-action danger" data-delp="${esc(p.name)}" title="Xoá tài khoản">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
           </button>
         </div>
-
-        <div class="pcard-bottom">
-
-          <button class="btn ${isLogging ? "primary confirm" : (isOnline ? "action-btn" : "primary")} sm btn-login-step" data-login="${esc(p.name)}" data-stage="${isLogging ? "confirm" : "idle"}">
-            ${isLogging ? `✓ Đã đăng nhập xong` : (isOnline ? "🔄 Đăng nhập lại" : "🔑 Đăng nhập ChatGPT")}
-          </button>
-        </div>
+        <div class="pcard-email" title="${esc(p.email || "")}">${esc(p.email || "—")}</div>
+        <button class="btn ${isLogging ? "primary confirm" : (isOnline ? "action-btn" : "primary")} sm btn-login-step" data-login="${esc(p.name)}" data-stage="${isLogging ? "confirm" : "idle"}">
+          ${isLogging ? "Đã xong" : (isOnline ? "Đăng nhập lại" : "Đăng nhập")}
+        </button>
       </div>
     `;
   }).join("");
@@ -166,45 +152,263 @@ async function handleLoginFlow(btn) {
     return;
   }
 
+  openLoginModal(name, btn);
+}
+
+// ---- Đăng nhập hàng loạt: dán nhiều dòng, tool chạy lần lượt ---------------
+const BULK_LABEL = {
+  pending: "Chờ", running: "Đang đăng nhập…", done: "Xong",
+  failed: "Lỗi", needs_human: "Cần bạn xác minh",
+};
+
+function renderBulkList(items) {
+  const box = $("#bm-list");
+  if (!box) return;
+  if (!items || !items.length) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  box.hidden = false;
+  box.innerHTML = items.map(it => `
+    <div class="bulk-row">
+      <span class="bulk-email" title="${esc(it.email)}">${esc(it.email)}</span>
+      <span class="bulk-prof">${esc(it.profile)}</span>
+      <span class="bulk-badge ${it.status}">${BULK_LABEL[it.status] || it.status}</span>
+    </div>
+    ${it.error ? `<div class="quota-reason">${esc(it.error)}</div>` : ""}
+  `).join("");
+}
+
+function openBulkModal() {
+  const m = $("#bulk-modal");
+  if (!m) return;
+  $("#bm-creds").value = "";
+  renderBulkList(null);
+  $("#bm-go").disabled = false;
+  m.hidden = false;
+  $("#bm-creds").focus();
+}
+
+function closeBulkModal() {
+  const m = $("#bulk-modal");
+  if (m) m.hidden = true;
+  if (state.bulkPoll) {
+    clearInterval(state.bulkPoll);
+    state.bulkPoll = null;
+  }
+}
+
+$("#open-bulk-login")?.addEventListener("click", openBulkModal);
+$("#bm-close")?.addEventListener("click", closeBulkModal);
+$("#bm-cancel")?.addEventListener("click", closeBulkModal);
+$("#bulk-modal .acc-modal-backdrop")?.addEventListener("click", closeBulkModal);
+
+$("#bm-go")?.addEventListener("click", async () => {
+  const creds = $("#bm-creds").value.trim();
+  if (!creds) {
+    showToast("Dán danh sách tài khoản vào ô trên đã.", "error");
+    return;
+  }
+  $("#bm-go").disabled = true;
   try {
-    await fetch(`/api/profiles/${name}/login`, { method: "POST" });
-    btn.textContent = "Xong";
-    btn.dataset.stage = "confirm";
-    btn.classList.add("confirm");
+    const res = await fetch("/api/profiles/bulk-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ creds })
+    });
+    const d = await res.json();
+    if (!res.ok) {
+      showToast(d.detail || "Không bắt đầu được", "error");
+      $("#bm-go").disabled = false;
+      return;
+    }
+    $("#bm-creds").value = "";      // xoá credential khỏi màn hình ngay
+    renderBulkList(d.items);
+    if (d.skipped?.length) {
+      showToast(`Bỏ qua ${d.skipped.length} dòng sai định dạng: ${d.skipped.join(", ")}`, "error");
+    }
+    showToast(`Bắt đầu đăng nhập ${d.started} tài khoản`, "info");
+  } catch (e) {
+    showToast(`Lỗi kết nối: ${e.message}`, "error");
+    $("#bm-go").disabled = false;
+    return;
+  }
+
+  if (state.bulkPoll) clearInterval(state.bulkPoll);
+  state.bulkPoll = setInterval(async () => {
+    try {
+      const d = await (await fetch("/api/profiles/bulk-login/status")).json();
+      renderBulkList(d.items);
+      if (!d.active) {
+        clearInterval(state.bulkPoll);
+        state.bulkPoll = null;
+        const ok = (d.items || []).filter(x => x.status === "done").length;
+        showToast(`Đăng nhập xong ${ok}/${(d.items || []).length} tài khoản`,
+                  ok ? "success" : "error");
+        $("#bm-go").disabled = false;
+        loadProfiles();
+      }
+    } catch (e) { /* vòng sau hỏi lại */ }
+  }, 2000);
+});
+
+// ---- Đăng nhập: tự động (dán credential) hoặc tự làm tay --------------------
+function openLoginModal(name, btn) {
+  state.loginTarget = { name, btn };
+  const m = $("#login-modal");
+  if (!m) return;
+  $("#lm-profile").textContent = `"${name}"`;
+  $("#lm-creds").value = "";
+  const st = $("#lm-status");
+  st.hidden = true;
+  st.textContent = "";
+  $("#lm-go").disabled = false;
+  const mb = $("#lm-manual");
+  mb.disabled = false;
+  mb.textContent = "Tự đăng nhập";
+  delete mb.dataset.mode;
+  m.hidden = false;
+  $("#lm-creds").focus();
+}
+
+function closeLoginModal() {
+  const m = $("#login-modal");
+  if (m) m.hidden = true;
+  if (state.loginPoll) {
+    clearInterval(state.loginPoll);
+    state.loginPoll = null;
+  }
+}
+
+$("#lm-close")?.addEventListener("click", closeLoginModal);
+$("#login-modal .acc-modal-backdrop")?.addEventListener("click", closeLoginModal);
+
+// Tự đăng nhập thủ công: y như trước, mở cửa sổ rồi bấm "Xong"
+$("#lm-manual")?.addEventListener("click", async (ev) => {
+  const t = state.loginTarget;
+  if (!t) return;
+
+  // Sau khi tự động hỏng, nút này đổi vai thành "Tôi đã đăng nhập xong"
+  const btn = ev.currentTarget;
+  if (btn.dataset.mode === "close") {
+    btn.disabled = true;
+    try {
+      const r = await (await fetch(`/api/profiles/${t.name}/login/close`,
+                                   { method: "POST" })).json();
+      showToast(r.logged_in ? `Tài khoản "${t.name}" đã kết nối!`
+                            : `Vẫn chưa thấy đăng nhập trên "${t.name}".`,
+                r.logged_in ? "success" : "error");
+    } catch (e) {
+      showToast(`Lỗi: ${e.message}`, "error");
+    }
+    btn.textContent = "Tự đăng nhập";
+    delete btn.dataset.mode;
+    closeLoginModal();
+    loadProfiles();
+    return;
+  }
+
+  closeLoginModal();
+  try {
+    await fetch(`/api/profiles/${t.name}/login`, { method: "POST" });
+    if (t.btn) {
+      t.btn.textContent = "Xong";
+      t.btn.dataset.stage = "confirm";
+      t.btn.classList.add("confirm");
+    }
     showToast(`Đã mở Chrome. Đăng nhập xong bấm "Xong".`, "info");
     loadProfiles();
   } catch (e) {
     showToast(`Không thể mở Chrome: ${e.message}`, "error");
   }
-}
+});
 
-$("#add-profile")?.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = $("#ap-name").value.trim();
-  if (!name) return;
+const LOGIN_PHASE_TEXT = {
+  starting: "Đang mở Chrome…",
+  email: "Đang nhập email…",
+  password: "Đang nhập mật khẩu…",
+  "2fa": "Đang nhập mã 2FA…",
+  captcha: "⚠️ ChatGPT đòi xác minh người thật — bấm giúp trong cửa sổ Chrome, tool sẽ tự chạy tiếp.",
+  done: "Xong!",
+};
+
+$("#lm-go")?.addEventListener("click", async () => {
+  const t = state.loginTarget;
+  if (!t) return;
+  const creds = $("#lm-creds").value.trim();
+  if (!creds) {
+    showToast("Dán email | mật khẩu | 2FA vào ô trên đã.", "error");
+    return;
+  }
+  const st = $("#lm-status");
+  $("#lm-go").disabled = true;
+  $("#lm-manual").disabled = true;
+  st.hidden = false;
+  st.textContent = "Đang mở Chrome…";
 
   try {
-    const res = await fetch("/api/profiles", {
+    const res = await fetch(`/api/profiles/${t.name}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ creds })
     });
     if (!res.ok) {
       const err = await res.json();
-      showToast(err.detail || "Không thể tạo tài khoản", "error");
+      st.textContent = err.detail || "Không mở được cửa sổ đăng nhập.";
+      $("#lm-go").disabled = false;
+      $("#lm-manual").disabled = false;
       return;
     }
-    $("#ap-name").value = "";
-    $("#add-profile").hidden = true;
-    state.showAddProfile = false;
-    $("#profiles-toggle-text").textContent = "Thêm tài khoản";
-    showToast(`Đã thêm ${name}`, "success");
-    loadProfiles();
-  } catch (err) {
-    showToast("Lỗi kết nối máy chủ", "error");
+  } catch (e) {
+    st.textContent = `Lỗi kết nối: ${e.message}`;
+    $("#lm-go").disabled = false;
+    return;
   }
-});
+  $("#lm-creds").value = "";        // xoá khỏi màn hình ngay khi đã gửi đi
 
+  if (state.loginPoll) clearInterval(state.loginPoll);
+  state.loginPoll = setInterval(async () => {
+    try {
+      const d = await (await fetch(`/api/profiles/${t.name}/login/status`)).json();
+      st.textContent = d.needs_human
+        ? LOGIN_PHASE_TEXT.captcha
+        : (LOGIN_PHASE_TEXT[d.phase] || "Đang xử lý…");
+
+      if (d.phase === "failed" && d.open) {
+        // Tự động hỏng nhưng cửa sổ Chrome vẫn mở -> mời người dùng làm nốt bằng tay
+        clearInterval(state.loginPoll);
+        state.loginPoll = null;
+        st.textContent = (d.error || "Đăng nhập tự động không xong.")
+          + " Cửa sổ Chrome vẫn mở — bạn đăng nhập nốt rồi bấm nút bên dưới.";
+        $("#lm-go").disabled = true;
+        const mb = $("#lm-manual");
+        mb.disabled = false;
+        mb.textContent = "Tôi đã đăng nhập xong";
+        mb.dataset.mode = "close";
+        loadProfiles();
+        return;
+      }
+
+      if (d.logged_in === true) {
+        clearInterval(state.loginPoll);
+        state.loginPoll = null;
+        showToast(`Tài khoản "${t.name}" đã kết nối!`, "success");
+        closeLoginModal();
+        loadProfiles();
+      } else if (!d.open && d.logged_in === false) {
+        clearInterval(state.loginPoll);
+        state.loginPoll = null;
+        st.textContent = d.error || "Đăng nhập không thành công.";
+        $("#lm-go").disabled = false;
+        $("#lm-manual").disabled = false;
+        loadProfiles();
+      }
+    } catch (e) {
+      /* mạng chớp nháy - vòng sau hỏi lại */
+    }
+  }, 2000);
+});
 
 // ==========================================================================
 // 1. Templates & Upload Center
