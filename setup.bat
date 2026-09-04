@@ -1,5 +1,4 @@
 @echo off
-chcp 65001 >nul
 title Setup - Mockup Forge ChatGPT Automation
 
 echo ============================================================
@@ -7,54 +6,54 @@ echo   Mockup Forge - ChatGPT Automation Setup
 echo ============================================================
 echo.
 
-:: 1. Kiểm tra Python
-where python >nul 2>nul
+:: 1. Kiem tra Python
+python --version >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [LỖI] Không tìm thấy Python trên máy tính của bạn!
-    echo Vui lòng tải và cài đặt Python từ https://www.python.org/
-    echo Lưu ý tích chọn "Add Python to PATH" khi cài đặt.
+    echo [ERROR] Khong tim thay Python tren may tinh!
+    echo Vui long cai dat Python tu https://www.python.org/
+    echo Nho tich chon: "Add Python to PATH" khi cai dat.
     echo.
     pause
     exit /b 1
 )
 
-echo [1/3] Kiểm tra phiên bản Python...
+echo [1/3] Kiem tra phien ban Python:
 python --version
 echo.
 
-:: 2. Cài đặt các thư viện từ requirements.txt
-echo [2/3] Đang cài đặt các thư viện cần thiết từ requirements.txt...
+:: 2. Cai dat thu vien tu requirements.txt
+echo [2/3] Dang cai dat cac thu vien can thiet tu requirements.txt...
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 if %errorlevel% neq 0 (
     echo.
-    echo [LỖI] Quá trình cài đặt thư viện thất bại. Vui lòng kiểm tra lại kết nối mạng hoặc môi trường Python.
+    echo [ERROR] Cai dat thu vien that bai! Vui long kiem tra ket noi mang.
     pause
     exit /b 1
 )
-echo ✓ Cài đặt thư viện Python thành công!
+echo [OK] Cai dat thu vien Python thanh cong!
 echo.
 
-:: 3. Cài đặt trình duyệt cho Playwright
-echo [3/3] Đang tải và cấu hình trình duyệt Playwright (Chrome)...
+:: 3. Cai dat Playwright browser
+echo [3/3] Dang cai dat trinh duyet Playwright (Chrome)...
 python -m playwright install chrome
 if %errorlevel% neq 0 (
-    echo [CẢNH BÁO] Không thể cài kênh chrome của Playwright, đang thử tải chromium mặc định...
+    echo [WARNING] Khong the cai kenh chrome, dang thu cai chromium mac dinh...
     python -m playwright install chromium
 )
-echo ✓ Cài đặt trình duyệt hoàn tất!
+echo [OK] Cai dat trinh duyet hoan tat!
 echo.
 
 echo ============================================================
-echo   CÀI ĐẶT HOÀN TẤT THÀNH CÔNG!
+echo   CAI DAT HOAN TAT THANH CONG!
 echo ============================================================
 echo.
-echo Bước tiếp theo:
-echo 1. Đăng nhập tài khoản ChatGPT cho profile (bắt buộc trước khi gen):
-echo    Chạy lệnh:  python login.py acc1
+echo Buoc tiep theo:
+echo 1. Dang nhap ChatGPT cho profile (bat buoc truoc khi gen):
+echo    Chay lenh:  python login.py acc1
 echo.
-echo 2. Bật giao diện làm việc:
-echo    Chạy file:  start_ui.bat
+echo 2. Bat giao dien web:
+echo    Chay file:  start_ui.bat
 echo ============================================================
 echo.
 pause
