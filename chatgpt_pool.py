@@ -160,8 +160,10 @@ REFUSE_PAT = (
 TEMP_ERR_PAT = (
     "something went wrong", "an error occurred", "error generating",
     "network error", "please try again", "try again later",
+    "error on my side", "wasn't able to generate", "unable to generate",
     "đã xảy ra lỗi", "có lỗi xảy ra", "thử lại sau",
 )
+
 
 
 # Ảnh mockup thật thì to; thumbnail/icon thì không. Ưu tiên đo bằng kích thước
@@ -380,6 +382,20 @@ class ChatGPTPool:
         self._boot: list[asyncio.Task] = []
         # profile -> lý do hết lượt. Server/UI đọc trực tiếp dict này.
         self.exhausted: dict[str, str] = {}
+        # Tạo NGAY từ đầu. Trước đây queue chỉ ra đời khi run_collections chạy, mà
+        # lúc đó Chrome còn đang khởi động vài giây -> collection nạp thêm trong
+        # khoảng đó rơi vào hư không, server vẫn báo "đã xếp hàng".
+        self.collection_queue: asyncio.Queue[dict] = asyncio.Queue()
+        self._last_active_time: float = 0.0
+        self.running_collections = False   # đang ở chế độ collections (nạp thêm được)
+        # True = giữ ảnh đã gen khi collection phải chuyển sang tài khoản khác
+        # (nhanh hơn nhưng bộ ảnh sẽ pha trộn 2 hướng design)
+        self.resume_partial = bool(r.get("resume_partial_on_other_account", False))
+        # Sau khi hết việc, pool nán lại chừng này giây (Chrome vẫn mở) để còn nhận
+        # collection nạp thêm từ UI mà không phải bật lại trình duyệt.
+        self.idle_exit = float(r.get("idle_exit_seconds", 25))
+        # đủ ảnh rồi vẫn phải thấy danh sách ảnh đứng yên chừng này giây mới chốt
+        self.settle_seconds = float(r.get("settle_seconds", 8))
 
     # ---------------- lifecycle ----------------
     async def __aenter__(self) -> "ChatGPTPool":
@@ -629,7 +645,6 @@ class ChatGPTPool:
             msg = ("DOM ChatGPT không còn [data-message-author-role] - đang dùng "
                    "nhánh dự phòng, việc nhận diện ảnh kém chính xác hơn.")
             log.warning(msg)
-            self.warnings.append(msg)
         return bool(st["busy"]), self._pick(st["imgs"])
 
     async def _collect(self, page: Page) -> list[str]:
@@ -667,37 +682,49 @@ class ChatGPTPool:
         if kind == "error":
             raise NoImage(f"ChatGPT báo lỗi — {msg}")
 
-    async def _order_shots(self, page: Page, shots: list[_Shot]) -> list[_Shot]:
-        """Xếp ảnh theo thứ tự chúng hiện trong câu trả lời.
-
-        Ảnh gen ra tải song song nên thứ tự response về không đáng tin - xếp theo đó
-        là gán nhầm (design của cốc lưu vào file áo). DOM thì bày đúng thứ tự.
-        Ảnh nào không khớp được thì đẩy xuống cuối, giữ thứ tự response."""
-        if len(shots) < 2:
-            return shots
+    async def _dom_keys(self, page: Page) -> list[str]:
+        """URL (bỏ query) của các ảnh ĐANG hiện trong câu trả lời, theo thứ tự."""
         try:
-            keys = await page.evaluate(ORDER_JS)
+            return await page.evaluate(ORDER_JS)
         except Exception:  # noqa: BLE001
+            return []
+
+    async def _finalize(self, page: Page, shots: list[_Shot], want: int) -> list[_Shot]:
+        """Chốt danh sách ảnh: xếp đúng thứ tự và bỏ ảnh thừa.
+
+        Căn cứ là ẢNH ĐANG HIỆN TRÊN MÀN HÌNH lúc chốt. ChatGPT hay vẽ lại một ảnh ở
+        phút chót; bản bị thay vẫn nằm trong mớ response đã bắt nhưng KHÔNG còn trong
+        DOM nữa - đó là cách phân biệt chắc chắn. Trước đây chỗ này đoán bằng "ảnh nào
+        nặng hơn", mà 4 ảnh cùng cỡ 2.4-2.7 MB thì đoán là hên xui.
+
+        Chỉ khi DOM không cho đủ thông tin mới quay về suy đoán theo dung lượng.
+        """
+        if len(shots) <= 1:
             return shots
+        keys = await self._dom_keys(page)
         rank = {k: i for i, k in enumerate(keys)}
-        big = len(rank) + 1
-        return sorted(shots, key=lambda sh: (rank.get(sh.url.split("?")[0], big), sh.ts))
+        on_screen = [sh for sh in shots if sh.url.split("?")[0] in rank]
+        on_screen.sort(key=lambda sh: rank[sh.url.split("?")[0]])
 
-    @staticmethod
-    def _trim_shots(shots: list[_Shot], want: int) -> list[_Shot]:
-        """Dư ảnh thì giữ `want` ảnh NẶNG NHẤT, rồi xếp lại theo thứ tự đến.
+        if len(on_screen) >= want:
+            if len(shots) > want:
+                log.info("Bỏ %d ảnh đã bị ChatGPT thay / không còn hiển thị.",
+                         len(shots) - want)
+            return on_screen[:want]
 
-        Lúc đang gen, ChatGPT hay tải về bản xem trước nén rất mạnh của cùng một ảnh;
-        bản chốt luôn nặng hơn hẳn. Giữ nguyên thứ tự đến để còn gán đúng template
-        nào ra ảnh nào."""
-        if len(shots) <= want:
-            return shots
-        log.warning("Nhận %d ảnh cho lô %d ảnh - giữ %d ảnh nặng nhất (%s KB).",
-                    len(shots), want, want,
-                    ", ".join(str(len(sh.data or b"") // 1024) for sh in shots))
-        heavy = sorted(shots, key=lambda sh: len(sh.data or b""), reverse=True)[:want]
+        # DOM thiếu (ảnh lazy-load, DOM đổi cấu trúc...) -> ghép nốt theo thứ tự
+        # response, và chỉ tới lúc này mới phải suy đoán bằng dung lượng.
+        rest = sorted((sh for sh in shots if sh.url.split("?")[0] not in rank),
+                      key=lambda sh: sh.ts)
+        merged = on_screen + rest
+        if len(merged) <= want:
+            return merged
+        log.warning("DOM chỉ thấy %d/%d ảnh - đành giữ %d ảnh nặng nhất (%s KB).",
+                    len(on_screen), want, want,
+                    ", ".join(str(len(sh.data or b"") // 1024) for sh in merged))
+        heavy = sorted(merged, key=lambda sh: len(sh.data or b""), reverse=True)[:want]
         keep = {id(sh) for sh in heavy}
-        return [sh for sh in shots if id(sh) in keep]
+        return [sh for sh in merged if id(sh) in keep]
 
     async def _wait_images(self, page: Page, before: set, want: int,
                            net: "_ImageNet | None" = None) -> list[_Shot]:
@@ -720,9 +747,6 @@ class ChatGPTPool:
             netted = net.shots() if net else []
             dom = dom_shots(srcs)
             return netted if len(netted) >= len(dom) else dom
-
-        def trim(shots: list[_Shot]) -> list[_Shot]:
-            return self._trim_shots(shots, want)
 
         # pha 1: chờ ChatGPT bắt đầu trả lời (nút Stop hiện). Ảnh mới nhảy ra luôn
         # thì bỏ qua pha này. Sau 8s vẫn im -> soi chữ xem có phải hết lượt không,
@@ -759,16 +783,27 @@ class ChatGPTPool:
         # (từ chối / hỏi lại / hết lượt): soi ngay thay vì chờ hết giờ.
         deadline = loop.time() + self.gen_timeout * want
         quiet_since = None
+        ready_since = None            # từ lúc nào thì "đủ ảnh và không đổi nữa"
+        ready_keys = None
         next_diag = 0.0
         got: list[_Shot] = []
         while loop.time() < deadline:
             busy, srcs = await self._poll(page)
             arm(busy)
             got = best(srcs)
+
+            # Đủ số ảnh CHƯA CHẮC đã xong: ChatGPT hay vẽ lại một ảnh ở phút chót,
+            # có khi nút Stop cũng biến mất một nhịp giữa hai lần gọi công cụ. Nên
+            # đòi thêm: danh sách ảnh đứng yên suốt `settle_seconds` mới chốt.
             if not busy and len(got) >= want:
-                await page.wait_for_timeout(1_500)   # ảnh cuối kịp tải nốt
-                _, srcs2 = await self._poll(page)
-                return trim(await self._order_shots(page, best(srcs2)))
+                keys = tuple(sh.url for sh in got)
+                if ready_since is None or keys != ready_keys:
+                    ready_since, ready_keys = loop.time(), keys
+                elif loop.time() - ready_since >= self.settle_seconds:
+                    return await self._finalize(page, got, want)
+            else:
+                ready_since = None
+
             if busy:
                 quiet_since = None
             else:
@@ -792,13 +827,13 @@ class ChatGPTPool:
                                     "; ".join(f"{sh.w}x{sh.h} "
                                               f"{len(sh.data or b'') // 1024}KB "
                                               f"{sh.url[-60:]}" for sh in got))
-                        return trim(await self._order_shots(page, got))
+                        return await self._finalize(page, got, want)
                     raise NoImage("ChatGPT trả lời xong nhưng không có ảnh")
             await page.wait_for_timeout(1_500)
 
         if got:
             log.warning("Hết giờ, mới có %d/%d ảnh.", len(got), want)
-            return trim(await self._order_shots(page, got))
+            return await self._finalize(page, got, want)
         await self._raise_if_bad(page, stale)
         raise NoImage(f"quá {self.gen_timeout * want}s vẫn chưa có ảnh")
 
@@ -845,48 +880,27 @@ class ChatGPTPool:
         return False
 
     # ---------------- chạy 1 lượt: TẤT CẢ ảnh trong cùng 1 chat ----------------
-    async def run_batch(self, jobs: list[dict], on_update: UpdateCb = None) -> None:
-        """Gen cả lượt trong MỘT phiên chat của MỘT tài khoản.
-
-        Vì sao không chia tab nữa: mỗi chat cho ra một hướng design khác nhau, chia
-        ảnh ra nhiều chat thì bộ mockup không đồng nhất. Ở đây tất cả ảnh đi cùng
-        một cuộc hội thoại: lô đầu mang prompt gốc, các lô sau nối tiếp trong CHÍNH
-        chat đó với `followup_prompt` ("giữ nguyên design ở trên") nên ChatGPT vẫn
-        nhìn thấy design đã chốt.
-
-        Chia lô chỉ vì ChatGPT có trần số ảnh đính kèm mỗi tin nhắn (`batch_size`).
-        Ảnh trả về được gán cho template theo ĐÚNG THỨ TỰ upload.
-        """
+    async def _run_collection_on_slot(
+        self,
+        slot: _Slot,
+        page: Page,
+        col: dict,
+        on_update: UpdateCb = None
+    ) -> bool:
+        """Thực thi trọn vẹn 1 Collection trong 1 phiên chat duy nhất của 1 slot."""
         async def emit(job):
             if on_update:
                 res = on_update(job)
                 if asyncio.iscoroutine(res):
                     await res
 
-        async def fail_all(msg: str) -> None:
-            for j in jobs:
-                if j.get("status") in ("pending", "running"):
-                    j["status"] = "failed"
-                    j["error"] = msg
-                    await emit(j)
+        jobs = col.get("jobs", [])
+        pending_jobs = [j for j in jobs if j.get("status") != "done"]
+        if not pending_jobs:
+            col["status"] = "done"
+            return True
 
-        for j in jobs:
-            j.setdefault("status", "pending")
-            j.setdefault("error", None)
-
-        if not jobs:
-            return
-        if not self._slots:
-            await fail_all("Chưa chọn tài khoản nào")
-            return
-
-        slot = self._slots[0]
-        page = await slot.wait_ready()
-        if page is None:
-            await fail_all(f"Không mở được Chrome cho '{slot.profile}': {slot.error}")
-            return
-
-        # mở đúng 1 chat sạch cho cả lượt
+        # mở đúng 1 chat sạch cho collection này
         try:
             if slot.fresh:
                 slot.fresh = False
@@ -897,14 +911,20 @@ class ChatGPTPool:
             else:
                 await self._new_chat(page)
         except Exception as e:  # noqa: BLE001
-            await fail_all(f"Không mở được cửa sổ chat: {e}")
-            return
+            log.warning("[%s] Mở chat mới cho collection '%s' lỗi: %s", slot.label, col.get("name"), e)
+            for j in pending_jobs:
+                j["status"] = "failed"
+                j["error"] = f"Không mở được chat: {e}"
+                await emit(j)
+            col["status"] = "failed"
+            col["error"] = f"Không mở được chat: {e}"
+            return False
 
         seen = set(await self._collect(page))
-        chunks = [jobs[i:i + self.batch_size]
-                  for i in range(0, len(jobs), self.batch_size)]
-        log.info("[%s] gen %d ảnh trong 1 chat (%d lô, mỗi lô tối đa %d).",
-                 slot.label, len(jobs), len(chunks), self.batch_size)
+        chunks = [pending_jobs[i:i + self.batch_size]
+                  for i in range(0, len(pending_jobs), self.batch_size)]
+        log.info("[%s] Bắt đầu gen collection '%s' (%d ảnh, %d lô) trên tài khoản %s.",
+                 slot.label, col.get("name"), len(pending_jobs), len(chunks), slot.profile)
 
         quota: str | None = None
         for ci, chunk in enumerate(chunks):
@@ -915,10 +935,6 @@ class ChatGPTPool:
                 j["worker"] = slot.label
                 await emit(j)
 
-            # `pending` = những ảnh CHƯA lấy được. Mỗi vòng chỉ gửi lại đúng phần
-            # còn thiếu chứ không gen lại cả lô: ChatGPT hay lỗi giữa chừng sau khi
-            # đã ra được vài ảnh ("Something went wrong"), gen lại từ đầu vừa phí
-            # lượt vừa có nguy cơ ra design khác.
             pending = list(chunk)
             first_msg = (ci == 0)
             last_err: Exception | None = None
@@ -933,16 +949,15 @@ class ChatGPTPool:
                     slot.net.ignore(tpls)     # đừng nhận nhầm ảnh vừa gửi lên
                 imgs: list[_Shot] = []
                 try:
-                    # chỉ tin nhắn đầu tiên mới được phép mở chat mới
                     if not await self._upload(
                             page, tpls, allow_new_chat=(first_msg and round_no == 1)):
                         raise RuntimeError("không đính kèm được ảnh template")
                     if first_msg:
-                        text = jobs[0]["prompt"]          # lô đầu: chốt design
+                        text = col.get("prompt") or chunk[0].get("prompt")
                     elif round_no == 1:
-                        text = self.followup_prompt       # lô sau: giữ design
+                        text = self.followup_prompt
                     else:
-                        text = self.topup_prompt          # làm nốt phần thiếu
+                        text = self.topup_prompt
                     await self._send(page, text)
                     first_msg = False
                     imgs = await self._wait_images(page, seen, len(pending), slot.net)
@@ -952,15 +967,12 @@ class ChatGPTPool:
                     log.error("[%s] %s", slot.label, quota)
                 except Exception as e:  # noqa: BLE001
                     last_err = e
-                    log.warning("[%s] lô %d/%d vòng %d lỗi: %s",
-                                slot.label, ci + 1, len(chunks), round_no, e)
+                    log.warning("[%s] col '%s' lô %d/%d vòng %d lỗi: %s",
+                                slot.label, col.get("name"), ci + 1, len(chunks), round_no, e)
                     if _is_dead(e):
                         break
-                    # ChatGPT lỗi nhưng vài ảnh đã kịp về -> giữ lấy, đừng vứt
                     have = list(slot.net.shots()) if slot.net else []
                     if not have:
-                        # lưới cuối: bắt mạng hụt (ảnh lấy từ cache, body đọc lỗi...)
-                        # thì vẫn còn nhìn được DOM, tải lại bằng URL.
                         try:
                             have = [_Shot(u, None, i)
                                     for i, u in enumerate(await self._collect(page))
@@ -968,7 +980,7 @@ class ChatGPTPool:
                         except Exception:  # noqa: BLE001
                             have = []
                     if have:
-                        imgs = await self._order_shots(page, have)
+                        imgs = await self._finalize(page, have, len(pending))
                         log.warning("[%s] vẫn nhặt được %d ảnh trước khi lỗi.",
                                     slot.label, len(imgs))
 
@@ -986,8 +998,8 @@ class ChatGPTPool:
 
                 pending = pending[len(imgs):]
                 if pending and not quota and round_no <= self.max_retries:
-                    log.warning("[%s] còn thiếu %d ảnh -> xin ChatGPT làm nốt.",
-                                slot.label, len(pending))
+                    log.warning("[%s] col '%s' còn thiếu %d ảnh -> xin ChatGPT làm nốt.",
+                                slot.label, col.get("name"), len(pending))
                     await asyncio.sleep(2)
 
             for j in pending:
@@ -997,11 +1009,234 @@ class ChatGPTPool:
                     "ChatGPT không trả đủ ảnh sau nhiều lần xin làm nốt")
                 await emit(j)
 
+        # Hết lượt là thoát vòng lô ngay -> job ở các lô SAU chưa hề được đụng tới.
+        # Không quét nốt thì chúng kẹt "pending" vĩnh viễn: UI quay mãi, lượt gen
+        # không bao giờ coi như kết thúc.
+        for j in jobs:
+            if j.get("status") in (None, "pending", "running"):
+                j["status"] = "failed"
+                j["error"] = quota or "Lượt gen dừng giữa chừng"
+                await emit(j)
+
         if quota:
             self.exhausted[slot.profile] = quota
-            await fail_all(f"{quota} — chọn tài khoản khác rồi gen phần còn lại")
-        else:
-            await fail_all("không chạy tới (lượt gen đã dừng)")
+            col["status"] = "partial" if any(j["status"] == "done" for j in jobs) else "failed"
+            col["error"] = quota
+            return False
 
-        done = sum(1 for j in jobs if j["status"] == "done")
-        log.info("[%s] xong %d/%d ảnh.", slot.label, done, len(jobs))
+        done_count = sum(1 for j in jobs if j["status"] == "done")
+        col["status"] = "done" if done_count == len(jobs) else ("partial" if done_count > 0 else "failed")
+        log.info("[%s] Hoàn thành collection '%s': %d/%d ảnh.",
+                 slot.label, col.get("name"), done_count, len(jobs))
+        return True
+
+    # ---------------- chạy 1 lượt đơn lẻ (tương thích ngược) ----------------
+    async def run_batch(self, jobs: list[dict], on_update: UpdateCb = None) -> None:
+        """Gen cả lượt trong MỘT phiên chat của MỘT tài khoản."""
+        if not jobs:
+            return
+        if not self._slots:
+            for j in jobs:
+                j["status"] = "failed"
+                j["error"] = "Chưa chọn tài khoản nào"
+            return
+        slot = self._slots[0]
+        page = await slot.wait_ready()
+        if page is None:
+            for j in jobs:
+                j["status"] = "failed"
+                j["error"] = f"Không mở được Chrome cho '{slot.profile}': {slot.error}"
+            return
+        fake_col = {
+            "id": "single",
+            "name": "Single",
+            "prompt": jobs[0]["prompt"] if jobs else "",
+            "jobs": jobs,
+            "status": "running"
+        }
+        await self._run_collection_on_slot(slot, page, fake_col, on_update=on_update)
+
+    def enqueue_collections(self, collections: list[dict]) -> bool:
+        """Nạp thêm collections vào hàng đợi đang chạy. False = không nạp được."""
+        if not collections:
+            return False
+        if not self.running_collections:
+            log.warning("Pool không ở chế độ collections - không nạp thêm được.")
+            return False
+        try:
+            loop = asyncio.get_running_loop()
+            self._last_active_time = loop.time()
+        except RuntimeError:
+            pass
+        for col in collections:
+            col["status"] = "pending"
+            for j in col.get("jobs", []):
+                j["status"] = "pending"
+            self.collection_queue.put_nowait(col)
+        log.info("Đã nạp thêm %d collection vào hàng đợi của Pool.", len(collections))
+        return True
+
+    # ---------------- chạy Collections hàng loạt (Worker Pool) ----------------
+    async def run_collections(
+        self,
+        collections: list[dict],
+        on_update: UpdateCb = None,
+        on_fleet_update: Callable[[str, dict], None] = None
+    ) -> None:
+        """Chạy danh sách Collections song song qua nhiều tài khoản ChatGPT (Worker Pool với Dynamic Queue)."""
+        if not collections:
+            return
+        if not self._slots:
+            for c in collections:
+                c["status"] = "failed"
+                c["error"] = "Không có tài khoản khả dụng"
+                for j in c.get("jobs", []):
+                    j["status"] = "failed"
+                    j["error"] = "Không có tài khoản khả dụng"
+            return
+
+        loop = asyncio.get_running_loop()
+        self.running_collections = True
+        self._last_active_time = loop.time()
+        for col in collections:
+            col["status"] = "pending"
+            for j in col.get("jobs", []):
+                j["status"] = "pending"
+            await self.collection_queue.put(col)
+
+        busy_slots: set[_Slot] = set()
+
+        async def worker(slot: _Slot):
+            profile = slot.profile
+            if on_fleet_update:
+                on_fleet_update(profile, {"status": "starting", "collection": None, "collection_name": None})
+
+            page = await slot.wait_ready()
+            if page is None:
+                log.error("Slot %s không mở được: %s", slot.label, slot.error)
+                if on_fleet_update:
+                    on_fleet_update(profile, {"status": "error", "error": str(slot.error), "collection": None})
+                return
+
+            if on_fleet_update:
+                on_fleet_update(profile, {"status": "idle", "collection": None, "collection_name": None})
+
+            while True:
+                if profile in self.exhausted:
+                    if on_fleet_update:
+                        on_fleet_update(profile, {
+                            "status": "exhausted",
+                            "reason": self.exhausted[profile],
+                            "collection": None
+                        })
+                    break
+
+                col = None
+                try:
+                    # Chờ lấy collection mới trong hàng đợi (timeout 1.5s để thăm dò trạng thái rảnh)
+                    col = await asyncio.wait_for(self.collection_queue.get(), timeout=1.5)
+                except asyncio.TimeoutError:
+                    now = loop.time()
+                    if not busy_slots and (now - self._last_active_time > self.idle_exit):
+                        # Toàn bộ worker đều rảnh và đã quá 25s không có thêm collection nào -> hoàn tất
+                        break
+                    continue
+
+                self._last_active_time = loop.time()
+                busy_slots.add(slot)
+
+                # Collection này từng chạy dở trên TÀI KHOẢN KHÁC (chủ tài khoản cũ
+                # hết lượt giữa chừng). Chat cũ nằm ở tài khoản đó, tài khoản này
+                # phải mở chat mới -> ChatGPT chốt một hướng design khác. Ghép ảnh
+                # hai chat vào cùng một bộ là mất đúng cái tính đồng nhất mà cả kiến
+                # trúc này sinh ra để giữ. Nên làm lại cả bộ trên tài khoản mới.
+                prev = col.get("ran_on")
+                if prev and prev != profile and not self.resume_partial:
+                    redo = [j for j in col.get("jobs", []) if j.get("status") == "done"]
+                    if redo:
+                        log.warning("[%s] Collection '%s' dở dang từ '%s' -> gen lại "
+                                    "cả %d ảnh cho đồng nhất design.",
+                                    slot.label, col.get("name"), prev, len(col["jobs"]))
+                        for j in col["jobs"]:
+                            j["status"] = "pending"
+                            j["error"] = None
+                            if on_update:
+                                res = on_update(j)
+                                if asyncio.iscoroutine(res):
+                                    await res
+                col["ran_on"] = profile
+                col["status"] = "running"
+                col["worker"] = slot.label
+                if on_fleet_update:
+                    on_fleet_update(profile, {
+                        "status": "busy",
+                        "collection": col["id"],
+                        "collection_name": col["name"],
+                        "prompt_name": col.get("prompt_name", "")
+                    })
+
+                ok = False
+                try:
+                    ok = await self._run_collection_on_slot(slot, page, col, on_update=on_update)
+                finally:
+                    busy_slots.discard(slot)
+                    self._last_active_time = loop.time()
+                    self.collection_queue.task_done()
+
+                if not ok and profile in self.exhausted:
+                    if on_fleet_update:
+                        on_fleet_update(profile, {
+                            "status": "exhausted",
+                            "reason": self.exhausted[profile],
+                            "collection": None
+                        })
+                    # Hết quota khi đang dở collection -> đẩy lại cho worker khác
+                    unfinished = [j for j in col.get("jobs", []) if j.get("status") != "done"]
+                    if unfinished:
+                        log.warning("[%s] Hết quota khi dở collection '%s'. Đẩy lại hàng đợi.",
+                                    slot.label, col["name"])
+                        col["status"] = "pending"
+                        col["worker"] = None
+                        await self.collection_queue.put(col)
+                    break
+                else:
+                    if on_fleet_update:
+                        on_fleet_update(profile, {"status": "idle", "collection": None, "collection_name": None})
+
+        # Chạy đồng thời tất cả các slot / worker.
+        # Vòng while: các worker nghỉ sau 25s không việc, nhưng UI có thể nạp thêm
+        # collection ĐÚNG vào khoảnh khắc đó (server thấy RUN active nên vẫn gửi).
+        # Không chạy lại thì mớ collection ấy nằm chết trong hàng đợi.
+        while True:
+            await asyncio.gather(*(worker(s) for s in self._slots))
+            left = self.collection_queue.qsize()
+            if left == 0:
+                break
+            usable = [s for s in self._slots
+                      if s.page is not None and s.profile not in self.exhausted]
+            if not usable:
+                break
+            log.warning("Còn %d collection vừa được nạp thêm - chạy tiếp.", left)
+            self._last_active_time = loop.time()
+            if self.collection_queue.qsize() == left and not usable:
+                break                       # không ai xử lý được -> thoát, khỏi lặp vô hạn
+
+        self.running_collections = False    # từ đây nạp thêm là bị từ chối thẳng
+
+        # Còn collection chưa chạy: nói ĐÚNG lý do thay vì mặc định đổ cho hết lượt
+        if not self.collection_queue.empty():
+            if self._slots and all(s.profile in self.exhausted for s in self._slots):
+                reason = "Tất cả tài khoản ChatGPT đều đã hết lượt tạo ảnh."
+            else:
+                reason = ("Không còn tài khoản nào chạy được "
+                          "(tab lỗi hoặc chưa đăng nhập).")
+            while not self.collection_queue.empty():
+                col = self.collection_queue.get_nowait()
+                col["status"] = "failed"
+                col["error"] = reason
+                for j in col.get("jobs", []):
+                    if j["status"] in ("pending", "running"):
+                        j["status"] = "failed"
+                        j["error"] = reason
+                self.collection_queue.task_done()
+

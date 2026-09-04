@@ -9,5 +9,9 @@ browser:
   generation_timeout: 300
   nav_timeout: 90
 run:
-  max_retries: 2
+  max_retries: 3
   batch_size: 6
+  # đủ ảnh rồi vẫn chờ ngần này giây thấy danh sách ảnh
+  # đứng yên mới chốt (ChatGPT hay vẽ lại 1 ảnh ở phút chót)
+  settle_seconds: 8
+

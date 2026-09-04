@@ -50,11 +50,19 @@ def load_cfg() -> dict:
     return yaml.safe_load((ROOT / "config.yaml").read_text(encoding="utf-8"))
 
 
-# ---- jobs (in-memory) ----
-JOBS: dict[str, dict] = {}         # id -> job
-RUN = {"active": False, "started": 0, "profile": None,
-       "exhausted": {},          # exhausted: profile -> lý do hết lượt
-       "warnings": []}           # cảnh báo không chặn lượt gen (vd: DOM đổi)
+# ---- jobs & collections (in-memory) ----
+JOBS: dict[str, dict] = {}               # id -> job
+COLLECTIONS: dict[str, dict] = {}        # id -> collection
+RUN = {
+    "active": False,
+    "started": 0,
+    "mode": "single",                    # "single" | "bulk"
+    "profile": None,                     # profile chính (cho single)
+    "profiles": [],                      # danh sách profiles tham gia (cho bulk)
+    "fleet": {},                         # profile -> {status, collection, collection_name, prompt_name}
+    "exhausted": {},                     # profile -> lý do hết lượt
+    "warnings": []                       # cảnh báo
+}
 
 
 # =============================================================== templates
@@ -148,50 +156,102 @@ def _prompt_by_id(pid: str) -> dict | None:
     return None
 
 
-async def _run_pool(jobs: list[dict], profile: str):
+ACTIVE_POOL: ChatGPTPool | None = None
+ACTIVE_LOOP: asyncio.AbstractEventLoop | None = None
+
+
+async def _run_pool(jobs: list[dict] | None = None,
+                    collections: list[dict] | None = None,
+                    profiles: list[str] | None = None):
+    """Worker pool chạy trong background."""
+    global ACTIVE_POOL, ACTIVE_LOOP
     cfg = load_cfg()
-    # cả lượt chạy trên ĐÚNG 1 tài khoản, 1 tab, 1 chat -> design đồng nhất.
-    # Không bật Chrome của các tài khoản khác cho khỏi tốn RAM.
-    cfg.setdefault("browser", {})["profiles"] = [{"name": profile, "tabs": 1}]
+    profs = profiles or ["acc1"]
+    cfg.setdefault("browser", {})["profiles"] = [{"name": p, "tabs": 1} for p in profs]
     RUN["active"] = True
     RUN["started"] = time.time()
-    RUN["profile"] = profile
+    RUN["profiles"] = profs
+    RUN["profile"] = profs[0] if profs else None
+    RUN["fleet"] = {p: {"status": "starting", "collection": None, "collection_name": None} for p in profs}
+    RUN["exhausted"] = {}
+    RUN["warnings"] = []
+
+    def on_fleet(p_name: str, info: dict):
+        RUN["fleet"][p_name] = info
+
     try:
         pool = ChatGPTPool(cfg)
+        ACTIVE_POOL = pool
+        ACTIVE_LOOP = asyncio.get_running_loop()
         RUN["exhausted"] = pool.exhausted      # dict dùng chung, UI poll thấy ngay
         RUN["warnings"] = pool.warnings        # vd: DOM ChatGPT đổi cấu trúc
         async with pool:
-            await pool.run_batch(jobs, on_update=lambda j: None)
+            if collections:
+                await pool.run_collections(collections, on_update=lambda j: None, on_fleet_update=on_fleet)
+            else:
+                await pool.run_batch(jobs or [], on_update=lambda j: None)
     except Exception as e:  # noqa: BLE001
         log.exception("Pool lỗi: %s", e)
-        for j in jobs:
-            if j["status"] in ("pending", "running"):
-                j["status"] = "failed"
-                j["error"] = f"pool: {e}"
+        if collections:
+            for c in collections:
+                if c.get("status") in ("pending", "running"):
+                    c["status"] = "failed"
+                    c["error"] = f"pool: {e}"
+                    for j in c.get("jobs", []):
+                        if j.get("status") in ("pending", "running"):
+                            j["status"] = "failed"
+                            j["error"] = f"pool: {e}"
+        if jobs:
+            for j in jobs:
+                if j["status"] in ("pending", "running"):
+                    j["status"] = "failed"
+                    j["error"] = f"pool: {e}"
     finally:
+        ACTIVE_POOL = None
+        ACTIVE_LOOP = None
         RUN["active"] = False
 
 
-def _run_pool_thread(jobs: list[dict], profile: str):
-    """Chạy pool trong THREAD riêng với ProactorEventLoop.
-
-    Playwright async cần spawn subprocess (trình duyệt) -> đòi ProactorEventLoop
-    trên Windows. Event loop của uvicorn là Selector nên create_task ngay trên
-    đó sẽ NotImplementedError. Tách thread + loop riêng là cách sạch nhất.
-    """
+def _run_pool_thread(jobs: list[dict] | None = None,
+                     collections: list[dict] | None = None,
+                     profiles: list[str] | None = None):
+    """Chạy pool trong THREAD riêng với ProactorEventLoop trên Windows."""
     if sys.platform == "win32":
         loop = asyncio.ProactorEventLoop()
     else:
         loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        loop.run_until_complete(_run_pool(jobs, profile))
+        loop.run_until_complete(_run_pool(jobs=jobs, collections=collections, profiles=profiles))
     finally:
         loop.close()
 
 
+# Tên file/thư mục Windows không được trùng mấy tên thiết bị này
+_WIN_RESERVED = {"con", "prn", "aux", "nul", *(f"com{i}" for i in range(1, 10)),
+                 *(f"lpt{i}" for i in range(1, 10))}
+
+
+def _safe_folder_name(name: str) -> str:
+    """Tên thư mục an toàn cho collection (tên này do người dùng đặt)."""
+    import re
+    cleaned = re.sub(r'[\/*?:"<>|]', "", name).strip()
+    # strip('. ') để '..' không thành đường lùi thư mục, và Windows cấm tên kết
+    # thúc bằng dấu chấm
+    cleaned = cleaned.replace(" ", "_").strip(". ")[:60]
+    if not cleaned or cleaned.split(".")[0].lower() in _WIN_RESERVED:
+        return f"Collection_{cleaned}" if cleaned else "Collection"
+    return cleaned
+
+
+async def _enqueue_on_pool(pool, cols: list[dict]) -> bool:
+    """Gọi enqueue trong loop của pool (asyncio.Queue không an toàn liên thread)."""
+    return pool.enqueue_collections(cols)
+
+
 @app.post("/api/generate")
 async def generate(payload: dict):
+    """Gen đơn lẻ trên 1 tài khoản (tương thích ngược)."""
     if RUN["active"]:
         raise HTTPException(409, "Đang chạy một lượt gen khác.")
     names = payload.get("templates") or []
@@ -210,6 +270,8 @@ async def generate(payload: dict):
         raise HTTPException(400, "Chưa chọn tài khoản hợp lệ để gen.")
 
     JOBS.clear()
+    COLLECTIONS.clear()
+    RUN["mode"] = "single"
     RUN["exhausted"] = {}
     RUN["warnings"] = []
     jobs = []
@@ -228,9 +290,196 @@ async def generate(payload: dict):
         JOBS[jid] = job
         jobs.append(job)
 
-    threading.Thread(target=_run_pool_thread, args=(jobs, profile),
+    threading.Thread(target=_run_pool_thread,
+                     kwargs={"jobs": jobs, "profiles": [profile]},
                      daemon=True).start()
     return {"started": len(jobs), "profile": profile, "jobs": _public_jobs()}
+
+
+@app.post("/api/collections/generate")
+async def generate_collections(payload: dict):
+    """Tạo Collections hàng loạt từ nhiều tài khoản ChatGPT chạy song song (hỗ trợ nối hàng đợi)."""
+    global ACTIVE_POOL, ACTIVE_LOOP
+    is_running = (
+        RUN["active"]
+        and ACTIVE_POOL is not None
+        and ACTIVE_LOOP is not None
+        and not ACTIVE_LOOP.is_closed()
+    )
+
+    selected_profiles = payload.get("profiles") or []
+    all_profs = [p["name"] for p in _get_profiles()]
+    # BỎ TRÙNG: mỗi thư mục profile chỉ mở được đúng 1 Chrome
+    # (launch_persistent_context khoá user-data-dir). Chọn 'acc1' hai lần là cái
+    # thứ hai chết ngay hoặc tệ hơn là hỏng profile.
+    valid_profiles = list(dict.fromkeys(p for p in selected_profiles if p in all_profs))
+
+    if not is_running and not valid_profiles:
+        raise HTTPException(400, "Cần chọn ít nhất 1 tài khoản ChatGPT hợp lệ.")
+
+    raw_collections = payload.get("collections")
+    templates = payload.get("templates") or []
+    prompt_ids = payload.get("prompt_ids") or []
+    single_pid = payload.get("prompt_id")
+    if single_pid and single_pid not in prompt_ids:
+        prompt_ids.append(single_pid)
+
+    count = max(1, min(100, int(payload.get("count", 1))))
+
+    if not raw_collections and (not prompt_ids or not templates):
+        raise HTTPException(400, "Cần chọn ít nhất 1 prompt và 1 template.")
+
+    if not is_running:
+        COLLECTIONS.clear()
+        JOBS.clear()
+        RUN["mode"] = "bulk"
+        RUN["exhausted"] = {}
+        RUN["warnings"] = []
+
+    built_collections = []
+
+    if raw_collections:
+        for item in raw_collections:
+            c_name = _safe_folder_name(item.get("name") or "Collection")
+            c_prompt = item.get("prompt", "")
+            c_pname = item.get("prompt_name", "Prompt")
+            c_tpls = item.get("templates", [])
+            cid = uuid.uuid4().hex[:8]
+            col_folder = OUTPUTS / c_name   # tạo khi lưu ảnh đầu tiên
+            c_jobs = []
+            for tname in c_tpls:
+                tp = TEMPLATES / tname
+                if not tp.exists():
+                    continue
+                jid = uuid.uuid4().hex[:8]
+                out_name = f"{Path(tname).stem}__{jid}.png"
+                dest_path = col_folder / out_name
+                job = {
+                    "id": jid,
+                    "template": str(tp),
+                    "template_name": tname,
+                    "template_url": f"/files/templates/{tname}",
+                    "prompt": c_prompt,
+                    "prompt_name": c_pname,
+                    "dest": str(dest_path),
+                    "result_url": f"/files/outputs/{c_name}/{out_name}",
+                    "status": "pending",
+                    "error": None
+                }
+                c_jobs.append(job)
+                JOBS[jid] = job
+
+            col = {
+                "id": cid,
+                "name": c_name,
+                "prompt": c_prompt,
+                "prompt_name": c_pname,
+                "jobs": c_jobs,
+                "status": "pending",
+                "worker": None,
+                "error": None
+            }
+            built_collections.append(col)
+            COLLECTIONS[cid] = col
+    else:
+        # Mỗi phiên chat là 1 Collection độc lập (chốt 1 hướng concept riêng)
+        for pid in prompt_ids:
+            p_obj = _prompt_by_id(pid)
+            if not p_obj or not p_obj.get("text"):
+                continue
+            existing_count = sum(1 for c in COLLECTIONS.values()
+                                 if c.get("prompt_name", "").startswith(p_obj["name"]))
+            for idx in range(1, count + 1):
+                col_num = existing_count + idx
+                suffix = f"_Col_{col_num:02d}_{uuid.uuid4().hex[:4]}"
+                c_name = _safe_folder_name(f"{p_obj['name']}{suffix}")
+                cid = uuid.uuid4().hex[:8]
+                col_folder = OUTPUTS / c_name   # tạo khi lưu ảnh đầu tiên
+                c_jobs = []
+                for tname in templates:
+                    tp = TEMPLATES / tname
+                    if not tp.exists():
+                        continue
+                    jid = uuid.uuid4().hex[:8]
+                    out_name = f"{Path(tname).stem}__{jid}.png"
+                    dest_path = col_folder / out_name
+                    job = {
+                        "id": jid,
+                        "template": str(tp),
+                        "template_name": tname,
+                        "template_url": f"/files/templates/{tname}",
+                        "prompt": p_obj["text"],
+                        "prompt_name": p_obj["name"],
+                        "dest": str(dest_path),
+                        "result_url": f"/files/outputs/{c_name}/{out_name}",
+                        "status": "pending",
+                        "error": None
+                    }
+                    c_jobs.append(job)
+                    JOBS[jid] = job
+
+                col = {
+                    "id": cid,
+                    "name": c_name,
+                    "prompt": p_obj["text"],
+                    "prompt_name": f"{p_obj['name']} (#{col_num:02d})",
+                    "jobs": c_jobs,
+                    "status": "pending",
+                    "worker": None,
+                    "error": None
+                }
+                built_collections.append(col)
+                COLLECTIONS[cid] = col
+
+    if not built_collections:
+        raise HTTPException(400, "Không có collection hợp lệ nào được tạo.")
+
+    if is_running:
+        # Chạy trong loop của pool rồi CHỜ kết quả: pool có thể từ chối (đang chạy
+        # chế độ đơn lẻ, hoặc vừa kết thúc). Trước đây cứ bắn đi rồi báo "đã xếp
+        # hàng" -> collection rơi vào hư không mà UI vẫn hiện chờ mãi.
+        fut = asyncio.run_coroutine_threadsafe(
+            _enqueue_on_pool(ACTIVE_POOL, built_collections), ACTIVE_LOOP)
+        try:
+            accepted = fut.result(timeout=10)
+        except Exception as e:  # noqa: BLE001
+            accepted = False
+            log.warning("Nạp thêm collection lỗi: %s", e)
+        if not accepted:
+            for c in built_collections:          # dọn sạch, đừng để rác treo trên UI
+                COLLECTIONS.pop(c["id"], None)
+                for j in c.get("jobs", []):
+                    JOBS.pop(j["id"], None)
+            raise HTTPException(
+                409, "Lượt gen đang chạy không nhận thêm collection "
+                     "(đang chạy chế độ đơn lẻ hoặc vừa kết thúc). Thử lại sau.")
+        log.info("Đã nối thêm %d collection vào hàng đợi của worker pool đang chạy.",
+                 len(built_collections))
+        return {
+            "enqueued": True,
+            "started_collections": len(built_collections),
+            "total_collections": len(COLLECTIONS),
+            "total_jobs": len(JOBS),
+            "profiles": RUN.get("profiles", valid_profiles),
+            "collections": _public_collections()
+        }
+
+    RUN["profiles"] = valid_profiles
+    threading.Thread(
+        target=_run_pool_thread,
+        kwargs={"collections": built_collections, "profiles": valid_profiles},
+        daemon=True
+    ).start()
+
+    return {
+        "enqueued": False,
+        "started_collections": len(built_collections),
+        "total_collections": len(COLLECTIONS),
+        "total_jobs": len(JOBS),
+        "profiles": valid_profiles,
+        "collections": _public_collections()
+    }
+
 
 
 def _public_jobs() -> list[dict]:
@@ -247,44 +496,105 @@ def _public_jobs() -> list[dict]:
     return out
 
 
+def _public_collections() -> list[dict]:
+    out = []
+    for c in COLLECTIONS.values():
+        c_jobs = []
+        for j in c.get("jobs", []):
+            has = Path(j["dest"]).exists()
+            c_jobs.append({
+                "id": j["id"],
+                "template_name": j["template_name"],
+                "template_url": j["template_url"],
+                "prompt_name": j["prompt_name"],
+                "status": j["status"],
+                "error": j.get("error"),
+                "worker": j.get("worker"),
+                "result_url": j["result_url"] if has else None,
+            })
+        done_count = sum(1 for j in c_jobs if j["status"] == "done")
+        total_count = len(c_jobs)
+        out.append({
+            "id": c["id"],
+            "name": c["name"],
+            "prompt_name": c["prompt_name"],
+            "prompt_text": c.get("prompt", ""),
+            "status": c.get("status", "pending"),
+            "worker": c.get("worker"),
+            "error": c.get("error"),
+            "done_count": done_count,
+            "total_count": total_count,
+            "jobs": c_jobs,
+        })
+    return out
+
+
 @app.get("/api/jobs")
 def get_jobs():
-    return {"active": RUN["active"], "profile": RUN.get("profile"),
-            "warnings": list(RUN.get("warnings") or []),
-            "jobs": _public_jobs(),
-            "exhausted": [{"profile": k, "reason": v}
-                          for k, v in (RUN.get("exhausted") or {}).items()]}
+    return {
+        "active": RUN["active"],
+        "mode": RUN.get("mode", "single"),
+        "profile": RUN.get("profile"),
+        "profiles": RUN.get("profiles", []),
+        "fleet": RUN.get("fleet", {}),
+        "warnings": list(RUN.get("warnings") or []),
+        "jobs": _public_jobs(),
+        "collections": _public_collections(),
+        "exhausted": [{"profile": k, "reason": v}
+                      for k, v in (RUN.get("exhausted") or {}).items()]
+    }
 
 
 @app.get("/api/jobs/zip")
-def download_jobs_zip():
+def download_jobs_zip(cid: str | None = None):
     import io
     import zipfile
     from fastapi.responses import StreamingResponse
     buf = io.BytesIO()
     count = 0
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
-        for j in JOBS.values():
-            p = Path(j["dest"])
-            if p.exists():
-                zf.write(p, arcname=p.name)
-                count += 1
-    if count == 0:
-        # fallback: pack any existing outputs if JOBS is empty
-        for p in OUTPUTS.glob("*.png"):
-            zf.write(p, arcname=p.name)
-            count += 1
+        if cid and cid in COLLECTIONS:
+            c = COLLECTIONS[cid]
+            folder_name = c["name"]
+            for j in c.get("jobs", []):
+                p = Path(j["dest"])
+                if p.exists():
+                    zf.write(p, arcname=f"{folder_name}/{p.name}")
+                    count += 1
+            filename = f"collection_{folder_name}.zip"
+        elif COLLECTIONS:
+            for c in COLLECTIONS.values():
+                folder_name = c["name"]
+                for j in c.get("jobs", []):
+                    p = Path(j["dest"])
+                    if p.exists():
+                        zf.write(p, arcname=f"{folder_name}/{p.name}")
+                        count += 1
+            filename = f"campaign_collections_{int(time.time())}.zip"
+        else:
+            for j in JOBS.values():
+                p = Path(j["dest"])
+                if p.exists():
+                    zf.write(p, arcname=p.name)
+                    count += 1
+            if count == 0:
+                for p in OUTPUTS.glob("*.png"):
+                    zf.write(p, arcname=p.name)
+                    count += 1
+            filename = f"mockups_{int(time.time())}.zip"
+
     buf.seek(0)
     return StreamingResponse(
         buf,
         media_type="application/zip",
-        headers={"Content-Disposition": f"attachment; filename=mockups_{int(time.time())}.zip"}
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
 
 @app.delete("/api/jobs")
 def clear_jobs():
     JOBS.clear()
+    COLLECTIONS.clear()
     return {"ok": True}
 
 
@@ -526,9 +836,13 @@ def serve_template(name: str):
     return FileResponse(str(p))
 
 
-@app.get("/files/outputs/{name}")
+@app.get("/files/outputs/{name:path}")
 def serve_output(name: str):
-    p = OUTPUTS / name
+    p = (OUTPUTS / name).resolve()
+    try:
+        p.relative_to(OUTPUTS.resolve())
+    except ValueError:
+        raise HTTPException(403)
     if not p.exists():
         raise HTTPException(404)
     return FileResponse(str(p))

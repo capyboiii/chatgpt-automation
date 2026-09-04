@@ -4,11 +4,13 @@ Tự động hoá: upload **template** + chọn **prompt design** → điều kh
 gen **ảnh mockup** (template đã gắn design) → tải về. Chạy **đa tab / đa profile**
 song song, mỗi mockup 1 phiên chat riêng.
 
-## Cài
-```bash
-pip install -r requirements.txt
-playwright install chrome
-```
+## Cài đặt
+- **Cách 1 (Nhanh nhất trên Windows)**: Nhấp đúp vào file `setup.bat`.
+- **Cách 2 (Thủ công)**:
+  ```bash
+  pip install -r requirements.txt
+  playwright install chrome
+  ```
 
 ## Cấu hình `config.yaml`
 Mỗi profile = 1 tài khoản ChatGPT. Mỗi lượt gen chạy trên **1 tài khoản** — chọn ngay
@@ -51,6 +53,11 @@ Hai lớp chặn để không nhận nhầm chính ảnh mình gửi lên (ChatG
 hiển thị trong tin nhắn, cũng là response ảnh to như thật): **hash SHA-256** của các
 template vừa gửi, và mốc **"đã thấy ChatGPT bắt đầu gen"** — mọi ảnh bắt được trước
 mốc đó đều bị bỏ.
+
+Chốt ảnh cũng theo **DOM**: đủ số ảnh chưa chắc đã xong, nên tool còn đợi danh sách
+ảnh đứng yên `run.settle_seconds` giây; lúc chốt, ảnh nào không còn hiển thị trong câu
+trả lời thì đó là bản ChatGPT đã vẽ lại và bị loại. Chỉ khi DOM không đọc được mới
+đoán bằng dung lượng.
 
 Thứ tự ảnh lấy theo **DOM** chứ không theo thứ tự response: ảnh tải song song nên
 response về lộn xộn, xếp theo đó là gán nhầm template (design của cốc lưu vào file

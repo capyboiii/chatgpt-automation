@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=29">
+  <link rel="stylesheet" href="style.css?v=38">
 </head>
 <body>
   <!-- Ambient backdrop glows -->
@@ -188,12 +188,21 @@
             <div class="section-title-wrap">
               <h2>Prompt Thiết Kế</h2>
             </div>
+            <span id="prompt-select-badge" class="stat-pill-badge purple" hidden>
+              <span class="stat-dot purple"></span>
+              <span class="stat-val" id="prompt-select-count">0 prompt</span>
+            </span>
           </div>
 
-          <button id="new-prompt" class="btn primary-subtle sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-            Tạo Prompt
-          </button>
+          <div class="panel-head-actions">
+            <button type="button" id="btn-select-all-prompts" class="btn action-btn sm" title="Chọn tất cả để tạo Collections hàng loạt">
+              Chọn tất cả
+            </button>
+            <button id="new-prompt" class="btn primary-subtle sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Tạo Prompt
+            </button>
+          </div>
         </div>
 
         <!-- Prompt List -->
@@ -254,21 +263,78 @@
         </div>
       </div>
 
+      <!-- Account Fleet Live Monitor -->
+      <div id="fleet-status-bar" class="fleet-status-bar" hidden>
+        <div class="fleet-header">
+          <span class="pulse-indicator"></span>
+          <span class="fleet-title">Tiến Độ Đội Tài Khoản ChatGPT (Worker Fleet):</span>
+        </div>
+        <div id="fleet-chips" class="fleet-chips"></div>
+      </div>
+
       <div id="quota-banner" class="quota-banner" hidden></div>
 
+      <!-- Results view (Single grid or Collections grouping) -->
+      <div id="collections-container" class="collections-container"></div>
       <div id="results-grid" class="results-grid"></div>
     </section>
 
   </main>
 
+  <!-- QUEUE DRAWER (BẢNG HÀNG ĐỢI COLLECTIONS) -->
+  <div class="queue-drawer-backdrop" id="queue-drawer-backdrop" hidden></div>
+  <div class="queue-drawer" id="queue-drawer" hidden>
+    <div class="queue-drawer-header">
+      <div class="queue-drawer-title-wrap">
+        <span class="queue-drawer-icon">📋</span>
+        <div>
+          <h3 class="queue-drawer-title">Bảng Hàng Đợi Collections (<span id="queue-count-badge">0</span>)</h3>
+          <p class="queue-drawer-subtitle">Danh sách các bộ Collection đã soạn, sẵn sàng chạy song song</p>
+        </div>
+      </div>
+      <div class="queue-drawer-header-actions">
+        <button type="button" class="btn ghost sm" id="btn-clear-staging">Xoá danh sách</button>
+        <button type="button" class="icon-btn-close" id="btn-close-drawer">✕</button>
+      </div>
+    </div>
+
+    <div class="queue-drawer-body" id="queue-drawer-body">
+      <!-- Staged items dynamically inserted here -->
+    </div>
+
+    <div class="queue-drawer-footer">
+      <div class="queue-summary-text" id="queue-summary-text">Chưa có Collection nào trong hàng đợi</div>
+      <button type="button" class="btn primary glow-btn" id="btn-start-queue" disabled>
+        ▶ Bắt đầu chạy hàng đợi
+      </button>
+    </div>
+  </div>
+
   <!-- FLOATING RUN BAR -->
   <div class="runbar" id="main-runbar">
     <div class="runbar-text">
+      <div class="runbar-status-pill" id="runbar-status-pill">
+        <span class="status-indicator-dot" id="runbar-status-dot"></span>
+        <span id="runbar-status-state">Sẵn sàng</span>
+      </div>
       <span class="runbar-main-msg" id="runbar-main-msg">Chọn template và prompt để bắt đầu</span>
     </div>
 
-    <div class="runbar-action">
-      <button id="run-btn" class="btn primary glow-btn" disabled>
+    <div class="runbar-actions">
+      <!-- Nút mở Bảng Hàng Đợi -->
+      <button type="button" id="btn-toggle-queue" class="btn ghost sm runbar-queue-btn" title="Xem danh sách các Collection trong hàng đợi">
+        <span class="queue-icon-svg">📋</span>
+        <span>Hàng đợi</span>
+        <span class="queue-badge-count" id="runbar-queue-badge">0</span>
+      </button>
+
+      <!-- Nút Thêm vào Hàng Đợi -->
+      <button type="button" id="btn-add-queue" class="btn secondary sm" disabled title="Đóng gói template và prompt đang chọn thành 1 Collection đưa vào hàng đợi">
+        <span>+ Thêm hàng đợi</span>
+      </button>
+
+      <!-- Nút Chạy chính -->
+      <button type="button" id="run-btn" class="btn primary glow-btn" disabled>
         <span id="run-btn-text">Tạo Mockup</span>
       </button>
     </div>
@@ -280,10 +346,10 @@
     <div class="acc-modal-backdrop"></div>
     <div class="acc-modal-card">
       <div class="form-header">
-        <h4>Chọn tài khoản để gen</h4>
+        <h4 id="acc-modal-title">Chọn tài khoản để gen</h4>
         <button type="button" id="acc-modal-close" class="icon-btn-close">✕</button>
       </div>
-      <p class="acc-modal-note">
+      <p id="acc-modal-note" class="acc-modal-note">
         Cả lượt gen chạy trên <b>1 tài khoản, trong 1 phiên chat</b> để bộ mockup
         đồng nhất design.
       </p>
@@ -312,6 +378,6 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=38"></script>
 </body>
 </html>

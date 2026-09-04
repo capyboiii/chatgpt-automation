@@ -12,8 +12,14 @@ const state = {
   filterQuery: "",
   prompts: [],
   promptId: null,
+  selectedPrompts: new Set(),
+  selectedFleetProfiles: new Set(),
   polling: null,
   jobs: [],
+  collections: [],
+  stagedQueue: [],
+  fleet: {},
+  runProfile: null,
   showAddProfile: false,
 };
 
@@ -432,10 +438,14 @@ async function loadPrompts() {
     const d = await res.json();
     state.prompts = d.items || [];
     
-    if (!state.promptId && state.prompts.length > 0) {
+    // Giữ các prompt đã chọn còn tồn tại
+    const validIds = new Set(state.prompts.map(p => p.id));
+    for (const id of state.selectedPrompts) {
+      if (!validIds.has(id)) state.selectedPrompts.delete(id);
+    }
+    if (state.selectedPrompts.size === 0 && state.prompts.length > 0) {
+      state.selectedPrompts.add(state.prompts[0].id);
       state.promptId = state.prompts[0].id;
-    } else if (!state.prompts.some(p => p.id === state.promptId)) {
-      state.promptId = null;
     }
     renderPrompts();
   } catch (err) {
@@ -445,6 +455,25 @@ async function loadPrompts() {
 
 function renderPrompts() {
   const list = $("#prompt-list");
+  const badge = $("#prompt-select-badge");
+  const badgeCount = $("#prompt-select-count");
+  const selAllBtn = $("#btn-select-all-prompts");
+
+  if (badge && badgeCount) {
+    const n = state.selectedPrompts.size;
+    if (n > 0) {
+      badge.hidden = false;
+      badgeCount.textContent = `${n} đã chọn`;
+    } else {
+      badge.hidden = true;
+    }
+  }
+
+  if (selAllBtn && state.prompts.length > 0) {
+    const all = state.selectedPrompts.size === state.prompts.length;
+    selAllBtn.textContent = all ? "Bỏ chọn" : "Chọn tất cả";
+  }
+
   if (!list) return;
 
   if (state.prompts.length === 0) {
@@ -454,10 +483,10 @@ function renderPrompts() {
   }
 
   list.innerHTML = state.prompts.map(p => {
-    const isSelected = p.id === state.promptId;
+    const isSelected = state.selectedPrompts.has(p.id);
     return `
-      <div class="prompt-card ${isSelected ? "selected" : ""}" data-id="${p.id}" title="Click để chọn">
-        <span class="prompt-radio"></span>
+      <div class="prompt-card prompt-item ${isSelected ? "selected" : ""}" data-id="${p.id}" title="Click để chọn/bỏ chọn">
+        <span class="prompt-card-chk"></span>
         <div class="prompt-content">
           <div class="prompt-title">${esc(p.name)}</div>
           <div class="prompt-snippet">${esc(p.text)}</div>
@@ -480,7 +509,7 @@ function renderPrompts() {
 
   list.querySelectorAll("[data-more]").forEach(btn => {
     btn.addEventListener("click", (e) => {
-      e.stopPropagation();                       // đừng đổi prompt đang chọn
+      e.stopPropagation();
       const card = btn.closest(".prompt-card");
       const open = card.classList.toggle("expanded");
       btn.textContent = open ? "Thu gọn" : "Xem thêm";
@@ -491,7 +520,17 @@ function renderPrompts() {
     card.addEventListener("click", (e) => {
       if (e.target.closest("[data-edit]") || e.target.closest("[data-delprompt]")
           || e.target.closest("[data-more]")) return;
-      state.promptId = card.dataset.id;
+      const id = card.dataset.id;
+      if (state.selectedPrompts.has(id)) {
+        if (state.selectedPrompts.size > 1) {
+          state.selectedPrompts.delete(id);
+        } else {
+          // nếu chỉ còn 1 mà bấm vào thì giữ nguyên
+        }
+      } else {
+        state.selectedPrompts.add(id);
+      }
+      state.promptId = [...state.selectedPrompts][0] || null;
       renderPrompts();
     });
   });
@@ -505,6 +544,7 @@ function renderPrompts() {
       const id = btn.dataset.delprompt;
       if (!confirm("Xoá Prompt này?")) return;
       await fetch(`/api/prompts/${id}`, { method: "DELETE" });
+      state.selectedPrompts.delete(id);
       showToast("Đã xoá Prompt", "info");
       loadPrompts();
     });
@@ -512,6 +552,20 @@ function renderPrompts() {
 
   updateRunMatrix();
 }
+
+$("#btn-select-all-prompts")?.addEventListener("click", () => {
+  if (state.prompts.length === 0) return;
+  const all = state.selectedPrompts.size === state.prompts.length;
+  if (all) {
+    // Chỉ giữ lại 1 prompt đầu tiên
+    state.selectedPrompts = new Set([state.prompts[0].id]);
+  } else {
+    // Chọn tất cả prompt
+    state.selectedPrompts = new Set(state.prompts.map(p => p.id));
+  }
+  state.promptId = [...state.selectedPrompts][0] || null;
+  renderPrompts();
+});
 
 $("#new-prompt")?.addEventListener("click", () => openPromptForm(null));
 $("#pf-cancel")?.addEventListener("click", () => { promptForm.hidden = true; });
@@ -560,71 +614,399 @@ promptForm?.addEventListener("submit", async (e) => {
 
 
 // ==========================================================================
-// 3. Clean Run Bar
+// 3. Queue Drawer & Staging Logic
+// ==========================================================================
+
+function renderStagedQueue() {
+  const queueCount = state.stagedQueue.length;
+  const badgeRunbar = $("#runbar-queue-badge");
+  const badgeDrawer = $("#queue-count-badge");
+  const body = $("#queue-drawer-body");
+  const summary = $("#queue-summary-text");
+  const startBtn = $("#btn-start-queue");
+
+  if (badgeRunbar) badgeRunbar.textContent = queueCount;
+  if (badgeDrawer) badgeDrawer.textContent = queueCount;
+
+  let totalMockups = 0;
+  state.stagedQueue.forEach(c => {
+    totalMockups += (c.templates || []).length;
+  });
+
+  if (summary) {
+    summary.textContent = queueCount === 0
+      ? "Chưa có Collection nào trong hàng đợi"
+      : `${queueCount} Collections · ${totalMockups} ảnh mockup`;
+  }
+
+  if (startBtn) {
+    startBtn.disabled = (queueCount === 0);
+  }
+
+  if (!body) return;
+
+  if (queueCount === 0) {
+    body.innerHTML = `
+      <div class="queue-empty-box">
+        <div style="font-size: 1.4rem; margin-bottom: 6px;">📥</div>
+        <div><b>Hàng đợi hiện đang trống</b></div>
+        <div style="font-size: 0.78rem; color: var(--muted); margin-top: 4px;">
+          Hãy chọn ảnh template và prompt trên giao diện rồi bấm <b>"+ Thêm vào hàng đợi"</b> để xếp vào đây.
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  body.innerHTML = state.stagedQueue.map((item, idx) => {
+    const tCount = (item.templates || []).length;
+    return `
+      <div class="staged-card" data-idx="${idx}">
+        <div class="staged-left">
+          <span class="staged-index">#${idx + 1}</span>
+          <div class="staged-info">
+            <div class="staged-name">📁 ${esc(item.prompt_name || item.name || "Collection")}</div>
+            <div class="staged-meta">
+              <b>${tCount}</b> templates (${esc((item.templates || []).slice(0, 3).join(", "))}${tCount > 3 ? ` +${tCount - 3}` : ""})
+            </div>
+          </div>
+        </div>
+        <button type="button" class="staged-del-btn" data-del-staged="${idx}" title="Xoá Collection này khỏi hàng đợi">✕</button>
+      </div>
+    `;
+  }).join("");
+
+  body.querySelectorAll("[data-del-staged]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const idx = parseInt(btn.dataset.delStaged);
+      state.stagedQueue.splice(idx, 1);
+      renderStagedQueue();
+      updateRunMatrix();
+      showToast("Đã xoá Collection khỏi hàng đợi", "info");
+    });
+  });
+}
+
+function toggleQueueDrawer(forceState) {
+  const drawer = $("#queue-drawer");
+  const backdrop = $("#queue-drawer-backdrop");
+  if (!drawer) return;
+
+  const isHidden = drawer.hidden;
+  const nextHidden = (typeof forceState === "boolean") ? !forceState : !isHidden;
+
+  drawer.hidden = nextHidden;
+  if (backdrop) backdrop.hidden = nextHidden;
+}
+
+$("#btn-toggle-queue")?.addEventListener("click", () => toggleQueueDrawer());
+$("#btn-close-drawer")?.addEventListener("click", () => toggleQueueDrawer(false));
+$("#queue-drawer-backdrop")?.addEventListener("click", () => toggleQueueDrawer(false));
+
+$("#btn-clear-staging")?.addEventListener("click", () => {
+  if (state.stagedQueue.length === 0) return;
+  state.stagedQueue = [];
+  renderStagedQueue();
+  updateRunMatrix();
+  showToast("Đã dọn sạch hàng đợi chờ", "info");
+});
+
+// Thêm bộ template + prompt hiện tại vào hàng đợi
+async function addCurrentToQueue() {
+  const tplCount = state.selected.size;
+  const promptCount = state.selectedPrompts.size;
+
+  if (tplCount === 0) {
+    showToast("Vui lòng chọn ít nhất 1 ảnh template!", "error");
+    return;
+  }
+  if (promptCount === 0) {
+    showToast("Vui lòng chọn ít nhất 1 prompt!", "error");
+    return;
+  }
+
+  const isRunning = !!state.polling;
+
+  // Nếu hệ thống ĐANG CHẠY: gửi trực tiếp vào active worker pool!
+  if (isRunning) {
+    const colsToAdd = [];
+    for (const pid of state.selectedPrompts) {
+      const p = state.prompts.find(x => x.id === pid);
+      if (!p) continue;
+      colsToAdd.push({
+        name: p.name,
+        prompt: p.text,
+        prompt_name: p.name,
+        templates: [...state.selected]
+      });
+    }
+
+    try {
+      const res = await fetch("/api/collections/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collections: colsToAdd })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.detail || "Lỗi nối hàng đợi", "error");
+        return;
+      }
+
+      const d = await res.json();
+      showToast(`⚡ Đã nối ${d.started_collections} Collection vào hàng đợi đang gen!`, "success");
+      
+      const resPanel = $("#results-panel");
+      if (resPanel) {
+        resPanel.hidden = false;
+        resPanel.scrollIntoView({ behavior: "smooth" });
+      }
+    } catch (err) {
+      showToast("Lỗi kết nối", "error");
+    }
+    return;
+  }
+
+  // Nếu hệ thống CHƯA CHẠY: đóng gói vào state.stagedQueue
+  let added = 0;
+  for (const pid of state.selectedPrompts) {
+    const p = state.prompts.find(x => x.id === pid);
+    if (!p) continue;
+    state.stagedQueue.push({
+      id: "stg_" + Math.random().toString(36).substring(2, 9),
+      name: p.name,
+      prompt_id: p.id,
+      prompt: p.text,
+      prompt_name: p.name,
+      templates: [...state.selected]
+    });
+    added++;
+  }
+
+  renderStagedQueue();
+  updateRunMatrix();
+  showToast(`Đã thêm ${added} Collection vào Hàng Đợi (${state.stagedQueue.length} bộ đang chờ)`, "success");
+}
+
+$("#btn-add-queue")?.addEventListener("click", addCurrentToQueue);
+$("#btn-start-queue")?.addEventListener("click", () => {
+  toggleQueueDrawer(false);
+  openAccModal();
+});
+
+// ==========================================================================
+// 4. Run Bar State & Modal
 // ==========================================================================
 
 function updateRunMatrix() {
   const tplCount = state.selected.size;
-  const activePrompt = state.prompts.find(p => p.id === state.promptId);
+  const promptCount = state.selectedPrompts.size;
+  const queueCount = state.stagedQueue.length;
 
+  const statusPill = $("#runbar-status-pill");
+  const statusState = $("#runbar-status-state");
   const mainMsg = $("#runbar-main-msg");
   const runBtn = $("#run-btn");
   const runBtnText = $("#run-btn-text");
+  const addQueueBtn = $("#btn-add-queue");
+  const isRunning = !!state.polling;
 
-  if (state.polling) {
-    if (mainMsg) mainMsg.textContent = `Đang xử lý tạo mockup...`;
-    if (runBtnText) runBtnText.textContent = "Đang chạy";
-    if (runBtn) runBtn.disabled = true;
+  const canAdd = (tplCount > 0 && promptCount > 0);
+  if (addQueueBtn) addQueueBtn.disabled = !canAdd;
+
+  if (isRunning) {
+    if (statusPill && statusState) {
+      statusPill.className = "runbar-status-pill running";
+      statusState.textContent = "Đang chạy";
+    }
+
+    if (addQueueBtn) {
+      addQueueBtn.classList.add("is-enqueue");
+      addQueueBtn.innerHTML = `<span>+ Nối hàng đợi</span>`;
+    }
+    if (runBtn) {
+      runBtn.disabled = true;
+      runBtn.classList.remove("is-enqueue");
+    }
+    if (runBtnText) runBtnText.textContent = "Đang gen...";
+
+    if (canAdd) {
+      if (mainMsg) mainMsg.innerHTML = `Đã chọn: <b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt (bấm + Nối hàng đợi)`;
+    } else {
+      if (mainMsg) mainMsg.innerHTML = `ChatGPT đang sinh mockup... Bạn có thể chọn thêm để nối tiếp`;
+    }
     return;
   }
 
-  if (tplCount === 0) {
-    if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 ảnh template`;
-    if (runBtnText) runBtnText.textContent = "Tạo Mockup";
-    if (runBtn) runBtn.disabled = true;
-  } else if (!activePrompt) {
-    if (mainMsg) mainMsg.textContent = `Chọn 1 prompt`;
-    if (runBtnText) runBtnText.textContent = "Tạo Mockup";
-    if (runBtn) runBtn.disabled = true;
-  } else {
-    if (mainMsg) mainMsg.innerHTML = `Đã chọn: <b>${tplCount}</b> ảnh · <b>${esc(activePrompt.name)}</b>`;
-    if (runBtnText) runBtnText.textContent = `Tạo ${tplCount} Mockup`;
+  if (addQueueBtn) {
+    addQueueBtn.classList.remove("is-enqueue");
+    addQueueBtn.innerHTML = `<span>+ Thêm hàng đợi</span>`;
+  }
+  if (runBtn) runBtn.classList.remove("is-enqueue");
+
+  if (queueCount > 0) {
+    if (statusPill && statusState) {
+      statusPill.className = "runbar-status-pill selected";
+      statusState.textContent = `${queueCount} bộ chờ`;
+    }
     if (runBtn) runBtn.disabled = false;
+    if (runBtnText) runBtnText.textContent = `▶ Chạy ${queueCount} bộ`;
+    if (canAdd) {
+      if (mainMsg) mainMsg.innerHTML = `Đã chọn thêm: <b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt`;
+    } else {
+      if (mainMsg) mainMsg.innerHTML = `Sẵn sàng chạy <b>${queueCount}</b> Collection trong hàng đợi`;
+    }
+    return;
+  }
+
+  // queueCount === 0
+  if (!canAdd) {
+    if (statusPill && statusState) {
+      statusPill.className = "runbar-status-pill";
+      statusState.textContent = "Sẵn sàng";
+    }
+    if (runBtn) runBtn.disabled = true;
+    if (runBtnText) runBtnText.textContent = "Tạo Mockup";
+    if (tplCount === 0) {
+      if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 ảnh template`;
+    } else {
+      if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 prompt`;
+    }
+  } else {
+    if (statusPill && statusState) {
+      statusPill.className = "runbar-status-pill selected";
+      statusState.textContent = "Đã chọn";
+    }
+    if (runBtn) runBtn.disabled = false;
+    const activePrompt = state.prompts.find(p => state.selectedPrompts.has(p.id));
+    const pName = activePrompt ? activePrompt.name : "Prompt";
+    if (promptCount === 1) {
+      if (runBtnText) runBtnText.textContent = `Tạo Mockup (${tplCount})`;
+      if (mainMsg) mainMsg.innerHTML = `<b>${tplCount}</b> ảnh · <b>${esc(pName)}</b>`;
+    } else {
+      if (runBtnText) runBtnText.textContent = `Tạo ${promptCount} bộ`;
+      if (mainMsg) mainMsg.innerHTML = `<b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt`;
+    }
   }
 }
 
 // ---- Chọn tài khoản rồi mới gen -------------------------------------------
 function openAccModal() {
   const box = $("#acc-modal-list");
+  const title = $("#acc-modal-title");
+  const note = $("#acc-modal-note");
+  const goBtn = $("#acc-modal-go");
   if (!box) return;
 
   if (state.profiles.length === 0) {
     showToast("Chưa có tài khoản nào. Thêm tài khoản trước đã.", "error");
     return;
   }
-  // ưu tiên tài khoản dùng lần trước, nếu nó vẫn còn
-  const last = localStorage.getItem("genProfile");
-  const names = state.profiles.map(p => p.name);
-  state.genProfile = names.includes(last) ? last : names[0];
 
-  box.innerHTML = state.profiles.map(p => {
+  const queueCount = state.stagedQueue.length;
+  const promptCount = Math.max(1, state.selectedPrompts.size);
+  const totalCollections = queueCount > 0 ? queueCount : promptCount;
+  const isBulk = totalCollections > 1;
+
+  if (queueCount > 0) {
+    if (title) title.textContent = `Chọn tài khoản chạy (${queueCount} Collections)`;
+    if (note) note.innerHTML = `Hệ thống sẽ chạy <b>${queueCount} Collections</b> trong hàng đợi song song qua các tài khoản được chọn.`;
+    if (goBtn) goBtn.textContent = `Bắt đầu chạy ${queueCount} Collections`;
+  } else if (!isBulk) {
+    // Single mode: 1 Collection duy nhất
+    if (title) title.textContent = "Chọn tài khoản để gen";
+    if (note) note.innerHTML = "Cả lượt gen chạy trên <b>1 tài khoản, trong 1 phiên chat</b> để bộ mockup đồng nhất design.";
+    if (goBtn) goBtn.textContent = "Bắt đầu gen (1 Collection)";
+
+    const last = localStorage.getItem("genProfile");
+    const names = state.profiles.map(p => p.name);
+    state.genProfile = names.includes(last) ? last : names[0];
+
+    box.innerHTML = state.profiles.map(p => {
+      const ready = p.exists && !p.login_open;
+      return `
+        <label class="acc-pick ${p.name === state.genProfile ? "selected" : ""}" data-acc="${esc(p.name)}">
+          <input type="radio" name="acc-pick" value="${esc(p.name)}" ${p.name === state.genProfile ? "checked" : ""}>
+          <span class="acc-pick-name">${esc(p.name)}</span>
+          <span class="acc-pick-state ${ready ? "ok" : "warn"}">
+            ${p.login_open ? "Đang mở Chrome" : (ready ? "Đã đăng nhập" : "Chưa kết nối")}
+          </span>
+        </label>`;
+    }).join("");
+
+    box.querySelectorAll(".acc-pick").forEach(el => {
+      el.addEventListener("click", () => {
+        state.genProfile = el.dataset.acc;
+        box.querySelectorAll(".acc-pick").forEach(x => x.classList.remove("selected"));
+        el.classList.add("selected");
+        el.querySelector("input").checked = true;
+      });
+    });
+    $("#acc-modal").hidden = false;
+    return;
+  } else {
+    // Bulk Collections mode
+    if (title) title.textContent = `Chọn đội tài khoản (${totalCollections} Collections)`;
+    if (note) note.innerHTML = `Hệ thống sẽ tạo <b>${totalCollections} Collections</b> song song qua các tài khoản được chọn.`;
+    if (goBtn) goBtn.textContent = `Bắt đầu tạo ${totalCollections} Collections (${state.selectedFleetProfiles.size || state.profiles.length} tài khoản)`;
+  }
+
+  if (state.selectedFleetProfiles.size === 0) {
+    state.profiles.forEach(p => {
+      if (p.exists) state.selectedFleetProfiles.add(p.name);
+    });
+  }
+
+  const allChecked = state.profiles.length > 0 && state.profiles.every(p => state.selectedFleetProfiles.has(p.name));
+
+  let html = `
+    <label class="acc-pick ${allChecked ? "selected" : ""}" id="fleet-select-all" style="border-style:dashed;">
+      <input type="checkbox" ${allChecked ? "checked" : ""}>
+      <span class="acc-pick-name">Chọn tất cả tài khoản</span>
+      <span class="acc-pick-state ok">${state.selectedFleetProfiles.size}/${state.profiles.length}</span>
+    </label>
+    <hr class="notice-sep">
+  `;
+
+  html += state.profiles.map(p => {
     const ready = p.exists && !p.login_open;
+    const isChecked = state.selectedFleetProfiles.has(p.name);
     return `
-      <label class="acc-pick ${p.name === state.genProfile ? "selected" : ""}" data-acc="${esc(p.name)}">
-        <input type="radio" name="acc-pick" value="${esc(p.name)}" ${p.name === state.genProfile ? "checked" : ""}>
+      <label class="acc-pick ${isChecked ? "selected" : ""}" data-fleet-acc="${esc(p.name)}">
+        <input type="checkbox" value="${esc(p.name)}" ${isChecked ? "checked" : ""}>
         <span class="acc-pick-name">${esc(p.name)}</span>
         <span class="acc-pick-state ${ready ? "ok" : "warn"}">
-          ${p.login_open ? "Đang mở Chrome" : (ready ? "Đã đăng nhập" : "Chưa kết nối")}
+          ${p.login_open ? "Đang mở Chrome" : (ready ? "Sẵn sàng" : "Chưa kết nối")}
         </span>
       </label>`;
   }).join("");
 
-  box.querySelectorAll(".acc-pick").forEach(el => {
-    el.addEventListener("click", () => {
-      state.genProfile = el.dataset.acc;
-      box.querySelectorAll(".acc-pick").forEach(x => x.classList.remove("selected"));
-      el.classList.add("selected");
-      el.querySelector("input").checked = true;
+  box.innerHTML = html;
+
+  const selectAllEl = box.querySelector("#fleet-select-all");
+  selectAllEl?.addEventListener("click", (e) => {
+    e.preventDefault();
+    const nextCheck = state.selectedFleetProfiles.size !== state.profiles.length;
+    if (nextCheck) {
+      state.profiles.forEach(p => state.selectedFleetProfiles.add(p.name));
+    } else {
+      state.selectedFleetProfiles.clear();
+    }
+    openAccModal();
+  });
+
+  box.querySelectorAll("[data-fleet-acc]").forEach(el => {
+    el.addEventListener("click", (e) => {
+      e.preventDefault();
+      const acc = el.dataset.fleetAcc;
+      if (state.selectedFleetProfiles.has(acc)) {
+        state.selectedFleetProfiles.delete(acc);
+      } else {
+        state.selectedFleetProfiles.add(acc);
+      }
+      openAccModal();
     });
   });
 
@@ -641,52 +1023,145 @@ $("#acc-modal-cancel")?.addEventListener("click", closeAccModal);
 $("#acc-modal .acc-modal-backdrop")?.addEventListener("click", closeAccModal);
 
 $("#run-btn")?.addEventListener("click", () => {
-  if (state.selected.size === 0 || !state.promptId) return;
+  const queueCount = state.stagedQueue.length;
+  if (queueCount === 0 && (state.selected.size === 0 || state.selectedPrompts.size === 0)) return;
   openAccModal();
 });
 
 $("#acc-modal-go")?.addEventListener("click", async () => {
-  if (state.selected.size === 0 || !state.promptId || !state.genProfile) return;
-  localStorage.setItem("genProfile", state.genProfile);
-  closeAccModal();
+  const queueCount = state.stagedQueue.length;
+  const isDirect = (queueCount === 0);
 
-  const payload = {
-    templates: [...state.selected],
-    prompt_id: state.promptId,
-    profile: state.genProfile
-  };
+  if (isDirect && (state.selected.size === 0 || state.selectedPrompts.size === 0)) return;
 
-  try {
-    const res = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
+  const promptCount = Math.max(1, state.selectedPrompts.size);
+  const isBulk = queueCount > 1 || (isDirect && promptCount > 1);
 
-    if (!res.ok) {
-      const err = await res.json();
-      showToast(err.detail || "Lỗi tạo mockup", "error");
+  if (queueCount > 0) {
+    // Chạy các Collection trong Hàng Đợi (Staged Queue)
+    const profiles = [...state.selectedFleetProfiles];
+    closeAccModal();
+
+    const payload = {
+      profiles: profiles.length ? profiles : state.profiles.map(p => p.name),
+      collections: state.stagedQueue
+    };
+
+    try {
+      const res = await fetch("/api/collections/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.detail || "Lỗi chạy hàng đợi", "error");
+        return;
+      }
+
+      const d = await res.json();
+      state.stagedQueue = [];
+      renderStagedQueue();
+      updateRunMatrix();
+      showToast(`Bắt đầu chạy ${d.started_collections} Collections trên ${d.profiles.length} tài khoản!`, "success");
+
+      const resPanel = $("#results-panel");
+      if (resPanel) {
+        resPanel.hidden = false;
+        resPanel.scrollIntoView({ behavior: "smooth" });
+      }
+
+      startPolling();
+    } catch (err) {
+      showToast("Lỗi kết nối", "error");
+    }
+  } else if (!isBulk) {
+    // Direct single
+    if (!state.genProfile) return;
+    localStorage.setItem("genProfile", state.genProfile);
+    closeAccModal();
+
+    const payload = {
+      templates: [...state.selected],
+      prompt_id: [...state.selectedPrompts][0],
+      profile: state.genProfile
+    };
+
+    try {
+      const res = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.detail || "Lỗi tạo mockup", "error");
+        return;
+      }
+
+      const d = await res.json();
+      showToast(`Bắt đầu tạo ${d.started} mockup trên "${d.profile}"`, "success");
+
+      const resPanel = $("#results-panel");
+      if (resPanel) {
+        resPanel.hidden = false;
+        resPanel.scrollIntoView({ behavior: "smooth" });
+      }
+
+      startPolling();
+    } catch (err) {
+      showToast("Lỗi kết nối", "error");
+    }
+  } else {
+    // Direct bulk
+    const profiles = [...state.selectedFleetProfiles];
+    if (profiles.length === 0) {
+      showToast("Cần chọn ít nhất 1 tài khoản tham gia!", "error");
       return;
     }
+    closeAccModal();
 
-    const d = await res.json();
-    showToast(`Bắt đầu tạo ${d.started} mockup trên "${d.profile}"`, "success");
+    const payload = {
+      profiles: profiles,
+      templates: [...state.selected],
+      prompt_ids: [...state.selectedPrompts],
+      count: 1
+    };
 
-    const resPanel = $("#results-panel");
-    if (resPanel) {
-      resPanel.hidden = false;
-      resPanel.scrollIntoView({ behavior: "smooth" });
+    try {
+      const res = await fetch("/api/collections/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.detail || "Lỗi tạo chiến dịch", "error");
+        return;
+      }
+
+      const d = await res.json();
+      showToast(`Bắt đầu chiến dịch: ${d.started_collections} collections trên ${d.profiles.length} tài khoản!`, "success");
+
+      const resPanel = $("#results-panel");
+      if (resPanel) {
+        resPanel.hidden = false;
+        resPanel.scrollIntoView({ behavior: "smooth" });
+      }
+
+      startPolling();
+    } catch (err) {
+      showToast("Lỗi kết nối", "error");
     }
-
-    startPolling();
-  } catch (err) {
-    showToast("Lỗi kết nối", "error");
   }
 });
 
 
 // ==========================================================================
-// 4. Results
+// 4. Results & Fleet Polling
 // ==========================================================================
 
 function startPolling() {
@@ -697,12 +1172,23 @@ function startPolling() {
       const res = await fetch("/api/jobs");
       const d = await res.json();
       state.jobs = d.jobs || [];
+      state.collections = d.collections || [];
+      state.fleet = d.fleet || {};
       state.runProfile = d.profile || null;
       renderNotices(d.exhausted || [], d.warnings || []);
 
-      renderResults(state.jobs);
+      renderFleetBar(d.fleet, d.exhausted || []);
 
-      const isRunning = d.active || state.jobs.some(j => ["pending", "running"].includes(j.status));
+      if (state.collections && state.collections.length > 0) {
+        renderCollections(state.collections);
+      } else {
+        renderResults(state.jobs);
+      }
+
+      const isJobsRunning = state.jobs.some(j => ["pending", "running"].includes(j.status));
+      const isColsRunning = state.collections.some(c => ["pending", "running"].includes(c.status));
+      const isRunning = d.active || isJobsRunning || isColsRunning;
+
       if (!isRunning) {
         clearInterval(state.polling);
         state.polling = null;
@@ -719,10 +1205,147 @@ function startPolling() {
   updateRunMatrix();
 }
 
+function renderFleetBar(fleet, exhausted) {
+  const bar = $("#fleet-status-bar");
+  const chips = $("#fleet-chips");
+  if (!bar || !chips) return;
+
+  const profiles = Object.keys(fleet || {});
+  if (profiles.length === 0) {
+    bar.hidden = true;
+    return;
+  }
+  bar.hidden = false;
+
+  const exhMap = new Map((exhausted || []).map(x => [x.profile, x.reason]));
+
+  chips.innerHTML = profiles.map(p => {
+    const info = fleet[p] || {};
+    const isExh = exhMap.has(p) || info.status === "exhausted";
+    const isBusy = info.status === "busy";
+    const statusClass = isExh ? "exhausted" : (isBusy ? "busy" : "");
+
+    let statusText = "Rảnh rỗi";
+    if (isExh) {
+      statusText = "⛔ Hết lượt tạo ảnh";
+    } else if (isBusy) {
+      statusText = `⚡ Đang gen: <b>${esc(info.collection_name || info.prompt_name || "Collection")}</b>`;
+    } else if (info.status === "starting") {
+      statusText = "Đang mở Chrome...";
+    } else if (info.status === "error") {
+      statusText = `Lỗi: ${esc(info.error || "")}`;
+    }
+
+    return `
+      <div class="fleet-chip ${statusClass}">
+        <span class="status-dot ${isExh ? "exhausted" : (isBusy ? "online" : "")}"></span>
+        <span class="fleet-chip-name">${esc(p)}:</span>
+        <span class="fleet-chip-status">${statusText}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderCollections(cols) {
+  const container = $("#collections-container");
+  const singleGrid = $("#results-grid");
+  const stat = $("#results-stat .stat-val") || $("#results-stat");
+  const fill = $("#jobs-progress-fill");
+
+  if (singleGrid) singleGrid.innerHTML = "";
+
+  let totalJobs = 0;
+  let doneJobs = 0;
+  cols.forEach(c => {
+    totalJobs += c.total_count || 0;
+    doneJobs += c.done_count || 0;
+  });
+
+  if (stat) {
+    stat.textContent = `${doneJobs} / ${totalJobs} hoàn thành (${cols.length} Collections)`;
+  }
+  if (fill) {
+    const pct = totalJobs > 0 ? Math.round((doneJobs / totalJobs) * 100) : 0;
+    fill.style.width = `${pct}%`;
+  }
+
+  if (!container) return;
+
+  container.innerHTML = cols.map(c => {
+    const isDone = c.status === "done";
+    const isRunning = c.status === "running";
+    const isPartial = c.status === "partial";
+    const statusBadgeClass = isDone ? "done" : (isRunning ? "running" : (isPartial ? "partial" : ""));
+    const statusText = isDone ? "Hoàn thành" : (isRunning ? "Đang chạy" : (isPartial ? "Hoàn thành một phần" : "Chờ"));
+
+    return `
+      <div class="collection-card ${statusBadgeClass}">
+        <div class="collection-header">
+          <div class="collection-title-group">
+            <span class="collection-folder-name">📁 ${esc(c.name)}</span>
+            <span class="collection-prompt-tag">💡 ${esc(c.prompt_name)}</span>
+            ${c.worker ? `<span class="collection-worker-tag">👤 ${esc(c.worker)}</span>` : ""}
+          </div>
+          <div class="collection-actions">
+            <span class="collection-stat-badge ${statusBadgeClass}">
+              ${c.done_count} / ${c.total_count} ảnh (${statusText})
+            </span>
+            <a href="/api/jobs/zip?cid=${c.id}" class="btn action-btn sm" title="Tải trọn bộ folder ${esc(c.name)}">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+              Tải bộ này (.zip)
+            </a>
+          </div>
+        </div>
+
+        <div class="results-grid">
+          ${(c.jobs || []).map(j => {
+            const isDone = j.status === "done" && j.result_url;
+            const isRunning = j.status === "running";
+            const isFailed = j.status === "failed";
+            return `
+              <div class="job-card">
+                <div class="job-preview-wrap">
+                  ${isDone ? `
+                    <img class="job-mockup-img" src="${j.result_url}" alt="Mockup" onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">
+                  ` : `
+                    <div class="job-slot-empty">
+                      ${isRunning ? `<span class="spin-ring"></span><span class="job-empty-lbl">Đang tạo...</span>`
+                        : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">❌ Lỗi</span>` : `<span class="job-empty-lbl">Chờ...</span>`)}
+                    </div>
+                  `}
+                </div>
+
+                <div class="job-footer">
+                  <div class="job-info-text">
+                    <span class="job-filename" title="${esc(j.template_name)}">${esc(j.template_name)}</span>
+                    ${j.worker ? `<span class="job-worker" title="Tài khoản/tab đang xử lý">${esc(j.worker)}</span>` : ""}
+                  </div>
+
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <span class="job-status-badge ${j.status}">
+                      ${isRunning ? `Đang tạo` : (isDone ? `Xong` : (isFailed ? `Lỗi` : `Chờ`))}
+                    </span>
+                    ${isDone ? `
+                      <a href="${j.result_url}" download class="icon-action" title="Tải về">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                      </a>
+                    ` : ""}
+                  </div>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
 // Băng cảnh báo: hết lượt tạo ảnh (chặn) + cảnh báo nhẹ (vd: mức suy nghĩ)
 function renderNotices(quota, warnings) {
   const box = document.getElementById("quota-banner");
   if (!box) return;
+  warnings = (warnings || []).filter(w => !w.includes("DOM ChatGPT không còn") && !w.includes("data-message-author-role"));
   if (!quota.length && !warnings.length) {
     box.hidden = true;
     box.innerHTML = "";
@@ -762,6 +1385,9 @@ function renderNotices(quota, warnings) {
 }
 
 function renderResults(jobs) {
+  const container = $("#collections-container");
+  if (container) container.innerHTML = "";
+
   const grid = $("#results-grid");
   const stat = $("#results-stat .stat-val") || $("#results-stat");
   const fill = $("#jobs-progress-fill");
@@ -793,21 +1419,13 @@ function renderResults(jobs) {
 
     return `
       <div class="job-card">
-        <div class="job-compare-view">
-          <div class="job-thumb-box">
-            <span class="thumb-tag">Gốc</span>
-            <img src="${j.template_url}" alt="${esc(j.template_name)}" onclick="window.openLightbox('${j.template_url}', '${esc(j.template_name)}')">
-          </div>
-          <div class="job-arrow-divider">→</div>
+        <div class="job-preview-wrap">
           ${isDone ? `
-            <div class="job-thumb-box">
-              <span class="thumb-tag success">Mockup</span>
-              <img src="${j.result_url}" alt="Result" onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">
-            </div>
+            <img class="job-mockup-img" src="${j.result_url}" alt="Mockup" onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">
           ` : `
             <div class="job-slot-empty">
-              ${isRunning ? `<span class="spin-ring"></span>`
-                : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">Lỗi</span>` : `Chờ…`)}
+              ${isRunning ? `<span class="spin-ring"></span><span class="job-empty-lbl">Đang tạo...</span>`
+                : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">❌ Lỗi</span>` : `<span class="job-empty-lbl">Chờ...</span>`)}
             </div>
           `}
         </div>
@@ -837,14 +1455,19 @@ function renderResults(jobs) {
 $("#btn-clear-jobs")?.addEventListener("click", async () => {
   await fetch("/api/jobs", { method: "DELETE" });
   state.jobs = [];
+  state.collections = [];
   renderResults([]);
+  const container = $("#collections-container");
+  if (container) container.innerHTML = "";
+  const bar = $("#fleet-status-bar");
+  if (bar) bar.hidden = true;
   const resPanel = $("#results-panel");
   if (resPanel) resPanel.hidden = true;
 });
 
 
 // ==========================================================================
-// 5. Lightbox Modal (Robust Functionality)
+// 5. Lightbox Modal
 // ==========================================================================
 
 window.openLightbox = function(url, caption = "") {
@@ -887,12 +1510,23 @@ async function init() {
   try {
     const res = await fetch("/api/jobs");
     const d = await res.json();
-    if (d.jobs && d.jobs.length > 0) {
-      state.jobs = d.jobs;
+    state.jobs = d.jobs || [];
+    state.collections = d.collections || [];
+    state.fleet = d.fleet || {};
+
+    if (state.collections && state.collections.length > 0) {
+      renderCollections(state.collections);
+      renderFleetBar(d.fleet, d.exhausted || []);
+      const resPanel = $("#results-panel");
+      if (resPanel) resPanel.hidden = false;
+      const isRunning = d.active || state.collections.some(c => ["pending", "running"].includes(c.status));
+      if (isRunning) startPolling();
+    } else if (state.jobs && state.jobs.length > 0) {
       renderResults(state.jobs);
-      if (d.active || state.jobs.some(j => ["pending", "running"].includes(j.status))) {
-        startPolling();
-      }
+      const resPanel = $("#results-panel");
+      if (resPanel) resPanel.hidden = false;
+      const isRunning = d.active || state.jobs.some(j => ["pending", "running"].includes(j.status));
+      if (isRunning) startPolling();
     }
   } catch (err) {}
 }
