@@ -36,7 +36,14 @@ nán lại `run.idle_exit_seconds` (mặc định 90s) với Chrome vẫn mở, 
 tiếp trong khoảng đó dùng lại luôn, khỏi tốn 10-30s bật lại cả đội.
 
 ### Gen lại mà không làm lại (chống hết token giữa chừng)
-Tên thư mục `<ProductType>__<Topic>__<Design>` đã định danh duy nhất từng ảnh cần có,
+Ảnh và thư mục được gom theo cấu trúc phân cấp:
+```
+/designs
+├── <design>/ (ví dụ: cute-cat/)
+│   ├── <mockup>/ (ví dụ: mug/, tshirt/, tote-bag/)
+│   │   └── <mockup>__<job_id>.png
+```
+Cấu trúc thư mục `designs/<design>/<mockup>` đã định danh duy nhất từng ảnh cần có,
 nên **đĩa chính là sổ tiến độ**: thư mục nào đã có ảnh thì lượt sau bỏ qua. Chạy 50 chủ
 đề mà hết token ở chủ đề thứ 23, chỉ cần bấm gen lại đúng như cũ — tool tự làm tiếp từ
 chỗ dở, bộ nào đã đủ ảnh thì không mở chat lần nữa. Cách này sống sót qua cả restart
@@ -44,6 +51,8 @@ server lẫn mất điện vì không phụ thuộc sổ sách trong RAM.
 
 Bỏ tick **"Bỏ qua ảnh đã có"** trong hộp chọn tài khoản nếu muốn gen đè lại tất cả.
 Khi không còn gì để làm, tool báo luôn thay vì mở Chrome vô ích.
+Khi tải file ZIP về qua nút "Tải về" / "Tải tất cả (ZIP)", file ZIP cũng giải nén ra đúng
+cây thư mục `/designs/<design>/<mockup>/...`.
 
 ### Tài khoản đứng hình
 Không phải lỗi nào cũng báo ra chữ. Có lúc tab mở chat xong rồi nằm im: khung soạn

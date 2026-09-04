@@ -25,3 +25,5 @@ run:
   batch_size: 6
   settle_seconds: 8
   stall_timeout: 120
+  idle_exit_seconds: 2
+  quiet_limit_seconds: 10

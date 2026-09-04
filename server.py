@@ -30,9 +30,11 @@ log = logging.getLogger("chatgpt.server")
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATES = ROOT / "data" / "templates"
-OUTPUTS = ROOT / "data" / "outputs"
+DESIGNS = ROOT / "designs"
+OUTPUTS = DESIGNS
+LEGACY_OUTPUTS = ROOT / "data" / "outputs"
 STATE_FILE = ROOT / "data" / "state.json"
-for d in (TEMPLATES, OUTPUTS):
+for d in (TEMPLATES, OUTPUTS, LEGACY_OUTPUTS):
     d.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="ChatGPT Mockup Automation")
@@ -63,7 +65,8 @@ RUN = {
     "profiles": [],                      # danh sách profiles tham gia (cho bulk)
     "fleet": {},                         # profile -> {status, collection, collection_name, prompt_name}
     "exhausted": {},                     # profile -> lý do hết lượt
-    "warnings": []                       # cảnh báo
+    "warnings": [],                      # cảnh báo
+    "stopped": False                     # cờ dừng khẩn cấp
 }
 
 
@@ -285,6 +288,7 @@ async def _run_pool(jobs: list[dict] | None = None,
     cfg["browser"]["reserves"] = [p["name"] for p in _get_profiles()
                                   if p["name"] not in profs]
     RUN["active"] = True
+    RUN["stopped"] = False
     RUN["started"] = time.time()
     RUN["profiles"] = profs
     RUN["profile"] = profs[0] if profs else None
@@ -326,6 +330,7 @@ async def _run_pool(jobs: list[dict] | None = None,
         ACTIVE_POOL = None
         ACTIVE_LOOP = None
         RUN["active"] = False
+        save_collections_state()
 
 
 def _run_pool_thread(jobs: list[dict] | None = None,
@@ -365,26 +370,37 @@ def _name_part(value: str, fallback: str) -> str:
     return cleaned or fallback
 
 
+def _design_slug(name: str) -> str:
+    """Tên thư mục design."""
+    return _name_part(name, "Design")
+
+
+def _mockup_slug(template_name: str) -> str:
+    """Tương thích ngược."""
+    return _product_type(template_name)
+
+
 def _folder_has_image(folder: str) -> bool:
     """Thư mục output này đã có ảnh chưa.
-
-    Đây là mốc để GEN LẠI MÀ KHÔNG LÀM LẠI: tên thư mục
-    <ProductType>__<Topic>__<Design> đã định danh duy nhất từng ảnh cần có, nên
-    chỉ cần nhìn đĩa là biết cái nào xong. Không cần sổ sách riêng, và còn sống
-    sót qua cả restart server lẫn mất điện.
+    Kiểm tra cả OUTPUTS (designs/) và fallback LEGACY_OUTPUTS (data/outputs/).
     """
-    d = OUTPUTS / folder
-    if not d.is_dir():
-        return False
-    return any(f.suffix.lower() in IMG_EXT and f.stat().st_size > 0
-               for f in d.iterdir() if f.is_file())
+    for base in (OUTPUTS, LEGACY_OUTPUTS):
+        d = base / folder
+        if d.is_dir() and any(f.suffix.lower() in IMG_EXT and f.stat().st_size > 0
+                              for f in d.iterdir() if f.is_file()):
+            return True
+    return False
 
 
-def _out_folder(template_name: str, topic: str, design: str) -> str:
-    """<ProductType>__<Topic>__<Design> - mỗi ảnh sản phẩm một thư mục."""
-    return "__".join((_product_type(template_name),
-                      _name_part(topic, "Topic"),
-                      _name_part(design, "Design")))
+def _out_folder(template_name: str, topic: str = "", design: str = "Design") -> str:
+    """Cấu trúc thư mục: <design_folder>/<ProductType>__<Topic>__<Design>
+    Ví dụ: NCAA/T-Shirt__NCAA__Vintage hoặc cute-cat/T-Shirt__cute-cat__Vintage
+    """
+    top = _name_part(topic, "Topic")
+    des = _name_part(design, "Design")
+    pt = _product_type(template_name)
+    mockup_folder = f"{pt}__{top}__{des}"
+    return f"{top}/{mockup_folder}"
 
 
 # Tên file/thư mục Windows không được trùng mấy tên thiết bị này
@@ -402,6 +418,69 @@ def _safe_folder_name(name: str) -> str:
     if not cleaned or cleaned.split(".")[0].lower() in _WIN_RESERVED:
         return f"Collection_{cleaned}" if cleaned else "Collection"
     return cleaned
+
+
+COLLECTIONS_STATE_FILE = ROOT / "data" / "collections_state.json"
+
+
+def save_collections_state() -> None:
+    """Lưu trạng thái các collection xuống đĩa để sau mở lại app vẫn chạy tiếp được."""
+    try:
+        COLLECTIONS_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        data = {
+            "saved_at": time.time(),
+            "collections": list(COLLECTIONS.values())
+        }
+        COLLECTIONS_STATE_FILE.write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception as e:  # noqa: BLE001
+        log.warning("Lưu collections state lỗi: %s", e)
+
+
+def load_collections_state() -> None:
+    """Nạp lại các collection từ phiên trước, đối chiếu với ảnh thật trên đĩa."""
+    if not COLLECTIONS_STATE_FILE.exists():
+        return
+    try:
+        raw = json.loads(COLLECTIONS_STATE_FILE.read_text(encoding="utf-8"))
+        cols = raw.get("collections") or []
+        loaded = 0
+        for c in cols:
+            cid = c.get("id")
+            if not cid:
+                continue
+            c_jobs = c.get("jobs", [])
+            for j in c_jobs:
+                jid = j.get("id")
+                if not jid:
+                    continue
+                dest = Path(j.get("dest", ""))
+                has = (dest.exists() and dest.stat().st_size > 0) or _folder_has_image(j.get("folder", ""))
+                if has:
+                    j["status"] = "done"
+                    j["error"] = None
+                elif j.get("status") in ("running", "pending"):
+                    j["status"] = "paused"
+                JOBS[jid] = j
+
+            done_cnt = sum(1 for j in c_jobs if j.get("status") == "done")
+            c["done_count"] = done_cnt
+            c["total_count"] = len(c_jobs)
+            if c_jobs and done_cnt >= len(c_jobs):
+                c["status"] = "done"
+            elif c.get("status") in ("running", "pending"):
+                c["status"] = "paused"
+            COLLECTIONS[cid] = c
+            loaded += 1
+        if loaded:
+            log.info("Đã khôi phục %d collections từ phiên trước (%s).",
+                     loaded, COLLECTIONS_STATE_FILE.name)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Khôi phục collections state lỗi: %s", e)
+
+
+load_collections_state()
 
 
 async def _enqueue_on_pool(pool, cols: list[dict],
@@ -441,8 +520,9 @@ async def generate(payload: dict):
         if not tp.exists():
             continue
         jid = uuid.uuid4().hex[:8]
-        folder = _out_folder(name, prompt.get("topic") or prompt["name"],
-                             prompt.get("design") or "Design")
+        top = prompt.get("topic") or prompt.get("name") or "Topic"
+        des = prompt.get("design") or "Design"
+        folder = _out_folder(name, top, des)
         out_name = f"{Path(name).stem}__{jid}.png"
         job = {"id": jid, "template": str(tp), "template_name": name,
                "template_url": f"/files/templates/{name}",
@@ -498,11 +578,13 @@ async def generate_collections(payload: dict):
         raise HTTPException(400, "Cần chọn ít nhất 1 prompt và 1 template.")
 
     if not is_running:
-        COLLECTIONS.clear()
-        JOBS.clear()
+        if not raw_collections:
+            COLLECTIONS.clear()
+            JOBS.clear()
         RUN["mode"] = "bulk"
         RUN["exhausted"] = {}
         RUN["warnings"] = []
+        RUN["stopped"] = False
 
     built_collections = []
 
@@ -512,7 +594,7 @@ async def generate_collections(payload: dict):
             c_prompt = item.get("prompt", "")
             c_pname = item.get("prompt_name", "Prompt")
             c_tpls = item.get("templates", [])
-            cid = uuid.uuid4().hex[:8]
+            cid = item.get("id") or uuid.uuid4().hex[:8]
             c_topic = item.get("topic") or c_pname
             c_design = item.get("design") or "Design"
             c_jobs = []
@@ -521,7 +603,6 @@ async def generate_collections(payload: dict):
                 if not tp.exists():
                     continue
                 jid = uuid.uuid4().hex[:8]
-                # Mỗi ảnh nằm trong thư mục riêng: <ProductType>__<Topic>__<Design>
                 folder = _out_folder(tname, c_topic, c_design)
                 if skip_done and _folder_has_image(folder):
                     skipped_jobs += 1        # đã gen rồi -> khỏi làm lại
@@ -649,6 +730,7 @@ async def generate_collections(payload: dict):
                      "(đang chạy chế độ đơn lẻ hoặc vừa kết thúc). Thử lại sau.")
         log.info("Đã nối thêm %d collection vào hàng đợi của worker pool đang chạy.",
                  len(built_collections))
+        save_collections_state()
         return {
             "enqueued": True,
             "started_collections": len(built_collections),
@@ -667,6 +749,7 @@ async def generate_collections(payload: dict):
         daemon=True
     ).start()
 
+    save_collections_state()
     return {
         "enqueued": False,
         "started_collections": len(built_collections),
@@ -677,6 +760,63 @@ async def generate_collections(payload: dict):
         "profiles": valid_profiles,
         "collections": _public_collections()
     }
+
+
+@app.post("/api/collections/resume")
+async def resume_collections(payload: dict):
+    """Tiếp tục chạy các collection chưa hoàn thành (do dừng khẩn cấp, hết token hoặc mở lại server sau)."""
+    selected_profiles = payload.get("profiles") or []
+    all_profs = [p["name"] for p in _get_profiles()]
+    valid_profiles = list(dict.fromkeys(p for p in selected_profiles if p in all_profs))
+
+    if not valid_profiles:
+        valid_profiles = RUN.get("profiles") or ([all_profs[0]] if all_profs else [])
+    if not valid_profiles:
+        raise HTTPException(400, "Cần chọn ít nhất 1 tài khoản ChatGPT hợp lệ.")
+
+    incomplete_cols = []
+    for c in list(COLLECTIONS.values()):
+        c_jobs = c.get("jobs", [])
+        for j in c_jobs:
+            dest = Path(j.get("dest", ""))
+            if (dest.exists() and dest.stat().st_size > 0) or _folder_has_image(j.get("folder", "")):
+                j["status"] = "done"
+        done_cnt = sum(1 for j in c_jobs if j.get("status") == "done")
+        c["done_count"] = done_cnt
+        c["total_count"] = len(c_jobs)
+        if done_cnt < len(c_jobs) or c.get("status") != "done":
+            c["status"] = "pending"
+            c["error"] = None
+            c["worker"] = None
+            for j in c_jobs:
+                if j.get("status") != "done":
+                    j["status"] = "pending"
+                    j["error"] = None
+                    j["worker"] = None
+            t_names = [j["template_name"] for j in c_jobs]
+            incomplete_cols.append({
+                "id": c["id"],
+                "name": c["name"],
+                "prompt": c.get("prompt", ""),
+                "prompt_name": c.get("prompt_name", ""),
+                "templates": t_names,
+                "topic": c.get("prompt_name", ""),
+                "design": "Design"
+            })
+
+    if not incomplete_cols:
+        return {
+            "resumed": 0,
+            "message": "Toàn bộ các bộ collection đã hoàn tất 100%!",
+            "total_collections": len(COLLECTIONS),
+            "collections": _public_collections()
+        }
+
+    return await generate_collections({
+        "collections": incomplete_cols,
+        "profiles": valid_profiles,
+        "skip_done": True
+    })
 
 
 
@@ -729,15 +869,30 @@ def _public_collections() -> list[dict]:
 
 @app.get("/api/jobs")
 def get_jobs():
+    cols = _public_collections()
+    jobs = _public_jobs()
+
+    # Nếu đã nạp collections hoặc jobs và tất cả đã có kết quả (done/failed/paused)
+    # thì coi như lượt gen này đã hoàn thành, UI không cần chờ pool đóng browser.
+    has_work = bool(cols or jobs)
+    still_working = False
+    if cols:
+        still_working = any(c.get("status") in ("pending", "running") for c in cols)
+    elif jobs:
+        still_working = any(j.get("status") in ("pending", "running") for j in jobs)
+
+    is_active = bool(RUN["active"] and (still_working if has_work else True))
+
     return {
-        "active": RUN["active"],
+        "active": is_active,
         "mode": RUN.get("mode", "single"),
         "profile": RUN.get("profile"),
         "profiles": RUN.get("profiles", []),
         "fleet": RUN.get("fleet", {}),
         "warnings": list(RUN.get("warnings") or []),
-        "jobs": _public_jobs(),
-        "collections": _public_collections(),
+        "stopped": RUN.get("stopped", False),
+        "jobs": jobs,
+        "collections": cols,
         "exhausted": [{"profile": k, "reason": v}
                       for k, v in (RUN.get("exhausted") or {}).items()]
     }
@@ -753,33 +908,43 @@ def download_jobs_zip(cid: str | None = None):
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         if cid and cid in COLLECTIONS:
             c = COLLECTIONS[cid]
-            folder_name = c["name"]
+            c_slug = _design_slug(c.get("name") or "collection")
             for j in c.get("jobs", []):
                 p = Path(j["dest"])
                 if p.exists():
-                    zf.write(p, arcname=f"{j.get('folder', folder_name)}/{p.name}")
+                    rel_folder = j.get("folder") or f"{c_slug}/{_mockup_slug(j.get('template_name', 'mockup'))}"
+                    zf.write(p, arcname=f"designs/{rel_folder}/{p.name}")
                     count += 1
-            filename = f"collection_{folder_name}.zip"
+            filename = f"designs_{c_slug}.zip"
         elif COLLECTIONS:
             for c in COLLECTIONS.values():
-                folder_name = c["name"]
+                c_slug = _design_slug(c.get("name") or "collection")
                 for j in c.get("jobs", []):
                     p = Path(j["dest"])
                     if p.exists():
-                        zf.write(p, arcname=f"{j.get('folder', folder_name)}/{p.name}")
+                        rel_folder = j.get("folder") or f"{c_slug}/{_mockup_slug(j.get('template_name', 'mockup'))}"
+                        zf.write(p, arcname=f"designs/{rel_folder}/{p.name}")
                         count += 1
-            filename = f"campaign_collections_{int(time.time())}.zip"
+            filename = f"designs_{int(time.time())}.zip"
         else:
             for j in JOBS.values():
                 p = Path(j["dest"])
                 if p.exists():
-                    zf.write(p, arcname=p.name)
+                    rel_folder = j.get("folder", "")
+                    arc = f"designs/{rel_folder}/{p.name}" if rel_folder else f"designs/{p.name}"
+                    zf.write(p, arcname=arc)
                     count += 1
             if count == 0:
-                for p in OUTPUTS.glob("*.png"):
-                    zf.write(p, arcname=p.name)
-                    count += 1
-            filename = f"mockups_{int(time.time())}.zip"
+                for base_dir in (OUTPUTS, LEGACY_OUTPUTS):
+                    for p in base_dir.rglob("*.png"):
+                        try:
+                            rel = p.relative_to(base_dir).as_posix()
+                            zf.write(p, arcname=f"designs/{rel}")
+                            count += 1
+                        except Exception:
+                            zf.write(p, arcname=f"designs/{p.name}")
+                            count += 1
+            filename = f"designs_{int(time.time())}.zip"
 
     buf.seek(0)
     return StreamingResponse(
@@ -789,10 +954,66 @@ def download_jobs_zip(cid: str | None = None):
     )
 
 
+@app.post("/api/jobs/stop")
+async def stop_jobs():
+    """Dừng khẩn cấp toàn bộ tiến trình gen đang chạy."""
+    global ACTIVE_POOL
+    stopped_col = None
+    remaining_cols = 0
+    done_cols = 0
+
+    if ACTIVE_POOL:
+        ACTIVE_POOL.stop()
+
+    for c in COLLECTIONS.values():
+        if c.get("status") == "running":
+            stopped_col = c.get("name")
+            c["status"] = "paused"
+            for j in c.get("jobs", []):
+                if j.get("status") in ("pending", "running"):
+                    j["status"] = "paused"
+                    j["error"] = "Dừng khẩn cấp"
+        elif c.get("status") == "pending":
+            c["status"] = "paused"
+            remaining_cols += 1
+            for j in c.get("jobs", []):
+                if j.get("status") == "pending":
+                    j["status"] = "paused"
+                    j["error"] = "Dừng khẩn cấp"
+        elif c.get("status") in ("done", "partial"):
+            done_cols += 1
+
+    for j in JOBS.values():
+        if j.get("status") in ("pending", "running"):
+            j["status"] = "paused"
+            j["error"] = "Dừng khẩn cấp"
+
+    RUN["active"] = False
+    RUN["stopped"] = True
+    save_collections_state()
+    log.warning("Đã nhận yêu cầu dừng khẩn cấp từ giao diện.")
+    return {
+        "ok": True,
+        "stopped_at": stopped_col,
+        "done_collections": done_cols,
+        "remaining_collections": remaining_cols
+    }
+
+
 @app.delete("/api/jobs")
 def clear_jobs():
+    global ACTIVE_POOL
+    if ACTIVE_POOL:
+        ACTIVE_POOL.stop()
+    RUN["active"] = False
+    RUN["stopped"] = False
     JOBS.clear()
     COLLECTIONS.clear()
+    if COLLECTIONS_STATE_FILE.exists():
+        try:
+            COLLECTIONS_STATE_FILE.unlink()
+        except Exception:
+            pass
     return {"ok": True}
 
 
@@ -1233,11 +1454,23 @@ def serve_output(name: str):
     p = (OUTPUTS / name).resolve()
     try:
         p.relative_to(OUTPUTS.resolve())
+        if p.exists() and p.is_file():
+            return FileResponse(str(p))
     except ValueError:
-        raise HTTPException(403)
-    if not p.exists():
-        raise HTTPException(404)
-    return FileResponse(str(p))
+        pass
+    legacy = (LEGACY_OUTPUTS / name).resolve()
+    try:
+        legacy.relative_to(LEGACY_OUTPUTS.resolve())
+        if legacy.exists() and legacy.is_file():
+            return FileResponse(str(legacy))
+    except ValueError:
+        pass
+    raise HTTPException(404)
+
+
+@app.get("/files/designs/{name:path}")
+def serve_design(name: str):
+    return serve_output(name)
 
 
 app.mount("/", StaticFiles(directory=str(ROOT / "static"), html=True), name="static")

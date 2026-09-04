@@ -336,8 +336,9 @@ body {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  row-gap: 12px;
   margin-bottom: 16px;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .panel-title-group {
@@ -345,7 +346,8 @@ body {
   align-items: center;
   gap: 10px;
   min-width: 0;
-  flex-shrink: 1;
+  flex-shrink: 0;
+  flex-wrap: wrap;
 }
 
 .section-icon-box {
@@ -457,9 +459,15 @@ body {
 .panel-head-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: nowrap;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.panel-head-actions .btn.sm {
+  padding: 6px 11px;
+  font-size: 0.82rem;
+  gap: 5px;
 }
 
 /* Action Buttons */
@@ -2384,3 +2392,135 @@ body {
 }
 
 .skip-done-row input { accent-color: #8b5cf6; }
+
+/* Nút Dừng Khẩn Cấp */
+.btn.glow-danger {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.4);
+  animation: pulse-danger 2s infinite;
+}
+@keyframes pulse-danger {
+  0%, 100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 20px rgba(239, 68, 68, 0.65); }
+}
+
+/* Cấu hình Batch */
+.batch-config-box {
+  margin: 10px 0 14px;
+  padding: 12px 14px;
+  background: var(--bg-panel-solid);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.batch-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.batch-title {
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--text);
+}
+.batch-hint {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.batch-options {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.batch-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.84rem;
+  color: var(--text-dim);
+  cursor: pointer;
+}
+.batch-radio input[type="radio"] {
+  accent-color: #06b6d4;
+}
+.batch-num-input {
+  width: 54px;
+  padding: 3px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-xs);
+  color: var(--text);
+  font-family: var(--f-mono);
+  font-size: 0.85rem;
+  text-align: center;
+}
+.batch-pause-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+  padding-top: 6px;
+  border-top: 1px dashed var(--border);
+}
+.batch-pause-label input {
+  accent-color: #06b6d4;
+}
+
+/* Tiến độ Batch */
+.batch-progress-card {
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-cyan);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.batch-prog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.batch-prog-title-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.batch-badge {
+  padding: 3px 9px;
+  background: rgba(6, 182, 212, 0.15);
+  border: 1px solid rgba(6, 182, 212, 0.35);
+  color: var(--accent-cyan);
+  font-family: var(--f-mono);
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-radius: var(--radius-full);
+}
+.batch-status-text {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text);
+}
+.batch-subtrack-bar {
+  width: 100%;
+  height: 5px;
+  background: var(--bg-panel-solid);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+.batch-subtrack-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-cyan), var(--accent));
+  border-radius: var(--radius-full);
+  transition: width 0.3s ease;
+}

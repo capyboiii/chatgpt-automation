@@ -430,14 +430,13 @@ class ChatGPTPool:
         self.collection_queue: asyncio.Queue[dict] = asyncio.Queue()
         self._last_active_time: float = 0.0
         self.running_collections = False   # đang ở chế độ collections (nạp thêm được)
+        self.stopped: bool = False         # cờ dừng khẩn cấp
         # True = giữ ảnh đã gen khi collection phải chuyển sang tài khoản khác
         # (nhanh hơn nhưng bộ ảnh sẽ pha trộn 2 hướng design)
         self.resume_partial = bool(r.get("resume_partial_on_other_account", False))
-        # Sau khi hết việc, pool nán lại chừng này giây (Chrome vẫn mở) để còn nhận
-        # collection nạp thêm từ UI mà không phải bật lại trình duyệt.
-        # Nán lại lâu hơn để lượt gen kế tiếp DÙNG LẠI Chrome đang mở thay vì bật
-        # lại từ đầu (mỗi lần bật tốn 10-30s cho cả đội hình).
-        self.idle_exit = float(r.get("idle_exit_seconds", 90))
+        # Sau khi hết việc trong hàng đợi, worker chỉ cần chờ 2-3s xác nhận không
+        # còn collection nào nạp thêm là hoàn tất ngay, không bắt người dùng chờ.
+        self.idle_exit = float(r.get("idle_exit_seconds", 2))
         # đủ ảnh rồi vẫn phải thấy danh sách ảnh đứng yên chừng này giây mới chốt
         # 5s: đủ để bắt cú "ChatGPT vẽ lại ảnh ở phút chót" (lần nào cũng mất hơn
         # 20s mới ra ảnh thay), mà không bắt mỗi tin nhắn phải đứng chờ 8 giây.
@@ -445,6 +444,9 @@ class ChatGPTPool:
         # Quá ngần này giây mà một collection chưa ra nổi ảnh nào -> coi tài khoản
         # là đứng hình, bỏ sang tài khoản khác thay vì ngồi thử lại đủ 4 vòng.
         self.stall_timeout = float(r.get("stall_timeout", 120))
+        # Thời gian im lặng tối đa khi ChatGPT trả thiếu ảnh: nếu đã có ít nhất 1 ảnh
+        # và ChatGPT ngừng tạo quá 10s, lập tức lưu ảnh và gửi yêu cầu gen tiếp.
+        self.quiet_limit_got = float(r.get("quiet_limit_seconds", 10))
 
     # ---------------- lifecycle ----------------
     async def __aenter__(self) -> "ChatGPTPool":
@@ -535,6 +537,23 @@ class ChatGPTPool:
             log.info("Thêm tài khoản '%s' (%d tab) vào đội hình đang chạy.",
                      name, len(slots))
         return added
+
+    def stop(self) -> None:
+        """Dừng khẩn cấp: hủy hàng đợi và ngắt các worker."""
+        self.stopped = True
+        cleared = 0
+        while not self.collection_queue.empty():
+            try:
+                col = self.collection_queue.get_nowait()
+                col["status"] = "paused"
+                for j in col.get("jobs", []):
+                    if j.get("status") in ("pending", "running"):
+                        j["status"] = "paused"
+                self.collection_queue.task_done()
+                cleared += 1
+            except (asyncio.QueueEmpty, ValueError):
+                break
+        log.warning("Đã kích hoạt DỪNG KHẨN CẤP: xả %d collection khỏi hàng đợi.", cleared)
 
     async def recruit_reserve(self) -> _Slot | None:
         """Bật thêm 1 tài khoản dự bị và trả về slot của nó.
@@ -970,9 +989,9 @@ class ChatGPTPool:
                     except QuotaExceeded as e:
                         raise QuotaExceeded(str(e), got) from None   # giữ ảnh đã có
                     next_diag = now + 8
-                # Chưa đủ ảnh mà đã im: ChatGPT hay gen từng ảnh một, giữa các ảnh
-                # có quãng nghỉ. Có ảnh rồi thì chờ rộng tay hơn trước khi bỏ cuộc.
-                quiet_limit = 75 if got else 30
+                # Chưa đủ ảnh mà đã im: nếu đã có ít nhất 1 ảnh và ChatGPT ngừng busy quá 10s,
+                # lập tức chốt ảnh đã có và gửi yêu cầu gen tiếp, không bắt người dùng chờ 75s.
+                quiet_limit = self.quiet_limit_got if got else 25
                 if now - quiet_since > quiet_limit:
                     if got:      # trả thiếu nhưng có còn hơn không
                         log.warning("ChatGPT chỉ trả %d/%d ảnh sau %ds im lặng. "
@@ -1082,7 +1101,7 @@ class ChatGPTPool:
         quota: str | None = None
         stall_since = asyncio.get_event_loop().time()   # mốc để phát hiện đứng hình
         for ci, chunk in enumerate(chunks):
-            if quota:
+            if quota or self.stopped:
                 break
             for j in chunk:
                 j["status"] = "running"
@@ -1094,7 +1113,7 @@ class ChatGPTPool:
             last_err: Exception | None = None
 
             for round_no in range(1, self.max_retries + 2):
-                if not pending or quota:
+                if not pending or quota or self.stopped:
                     break
                 tpls = [Path(j["template"]) for j in pending]
                 if slot.net:
@@ -1191,6 +1210,15 @@ class ChatGPTPool:
                 j["status"] = "failed"
                 j["error"] = quota or "Lượt gen dừng giữa chừng"
                 await emit(j)
+
+        if self.stopped:
+            col["status"] = "paused"
+            for j in jobs:
+                if j.get("status") in (None, "pending", "running"):
+                    j["status"] = "paused"
+                    j["error"] = "Dừng khẩn cấp"
+                    await emit(j)
+            return False
 
         if quota:
             self.exhausted[slot.profile] = quota
@@ -1294,6 +1322,8 @@ class ChatGPTPool:
                 on_fleet_update(profile, {"status": "idle", "collection": None, "collection_name": None})
 
             while True:
+                if self.stopped:
+                    break
                 if self.blocked(profile):
                     if on_fleet_update:
                         on_fleet_update(profile, {
@@ -1309,8 +1339,8 @@ class ChatGPTPool:
                     col = await asyncio.wait_for(self.collection_queue.get(), timeout=1.5)
                 except asyncio.TimeoutError:
                     now = loop.time()
-                    if not busy_slots and (now - self._last_active_time > idle_limit):
-                        # Toàn bộ worker đều rảnh và đã quá 25s không có thêm collection nào -> hoàn tất
+                    if not busy_slots and self.collection_queue.empty() and (now - self._last_active_time > idle_limit):
+                        # Toàn bộ worker đều rảnh và hàng đợi rỗng -> hoàn tất ngay
                         break
                     continue
 
@@ -1355,7 +1385,7 @@ class ChatGPTPool:
                     self._last_active_time = loop.time()
                     self.collection_queue.task_done()
 
-                if not ok and self.blocked(profile):
+                if not ok and not self.stopped and self.blocked(profile):
                     if on_fleet_update:
                         on_fleet_update(profile, {
                             "status": "exhausted",

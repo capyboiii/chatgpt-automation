@@ -20,6 +20,10 @@ const state = {
   stagedQueue: [],
   fleet: {},
   runProfile: null,
+  batches: [],
+  currentBatchIndex: 0,
+  resumeMode: false,
+  isStopped: false,
 };
 
 // ---- Toast Notification ----
@@ -1066,6 +1070,16 @@ function updateRunMatrix() {
   const addQueueBtn = $("#btn-add-queue");
   const isRunning = !!state.polling;
 
+  const stopBtn = $("#btn-emergency-stop");
+  const stopResultsBtn = $("#btn-stop-results");
+  if (isRunning) {
+    if (stopBtn) stopBtn.hidden = false;
+    if (stopResultsBtn) stopResultsBtn.hidden = false;
+  } else {
+    if (stopBtn) stopBtn.hidden = true;
+    if (stopResultsBtn) stopResultsBtn.hidden = true;
+  }
+
   const canAdd = (tplCount > 0 && promptCount > 0);
   if (addQueueBtn) addQueueBtn.disabled = !canAdd;
 
@@ -1088,7 +1102,7 @@ function updateRunMatrix() {
     if (canAdd) {
       if (mainMsg) mainMsg.innerHTML = `Đã chọn: <b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt (bấm + Nối hàng đợi)`;
     } else {
-      if (mainMsg) mainMsg.innerHTML = `ChatGPT đang sinh mockup... Bạn có thể chọn thêm để nối tiếp`;
+      if (mainMsg) mainMsg.innerHTML = `ChatGPT đang sinh mockup... Bạn có thể bấm <b>Dừng khẩn cấp</b> bất cứ lúc nào`;
     }
     return;
   }
@@ -1146,7 +1160,7 @@ function updateRunMatrix() {
 }
 
 // ---- Chọn tài khoản rồi mới gen -------------------------------------------
-function openAccModal() {
+function openAccModal(isResume = false, remainingCount = 0) {
   const box = $("#acc-modal-list");
   const title = $("#acc-modal-title");
   const note = $("#acc-modal-note");
@@ -1158,12 +1172,18 @@ function openAccModal() {
     return;
   }
 
+  state.resumeMode = Boolean(isResume);
+
   const queueCount = state.stagedQueue.length;
   const promptCount = Math.max(1, state.selectedPrompts.size);
   const totalCollections = queueCount > 0 ? queueCount : promptCount;
-  const isBulk = totalCollections > 1;
+  const isBulk = totalCollections > 1 || isResume;
 
-  if (queueCount > 0) {
+  if (isResume) {
+    if (title) title.textContent = `Chạy tiếp ${remainingCount} bộ chưa hoàn thành`;
+    if (note) note.innerHTML = `Hệ thống sẽ chạy tiếp <b>${remainingCount} Collections</b> còn thiếu, tự động bỏ qua các ảnh đã có trên đĩa.`;
+    if (goBtn) goBtn.textContent = `Bắt đầu chạy tiếp (${remainingCount} bộ)`;
+  } else if (queueCount > 0) {
     if (title) title.textContent = `Chọn tài khoản chạy (${queueCount} Collections)`;
     if (note) note.innerHTML = `Hệ thống sẽ chạy <b>${queueCount} Collections</b> trong hàng đợi song song qua các tài khoản được chọn.`;
     if (goBtn) goBtn.textContent = `Bắt đầu chạy ${queueCount} Collections`;
@@ -1282,6 +1302,45 @@ $("#run-btn")?.addEventListener("click", () => {
 });
 
 $("#acc-modal-go")?.addEventListener("click", async () => {
+  if (state.resumeMode) {
+    const profiles = [...state.selectedFleetProfiles];
+    if (profiles.length === 0) {
+      showToast("Cần chọn ít nhất 1 tài khoản tham gia!", "error");
+      return;
+    }
+    closeAccModal();
+    state.resumeMode = false;
+    state.isStopped = false;
+
+    try {
+      const res = await fetch("/api/collections/resume", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ profiles: profiles })
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        showToast(err.detail || "Lỗi khi chạy tiếp các bộ", "error");
+        return;
+      }
+
+      const d = await res.json();
+      showToast(`▶ Bắt đầu chạy tiếp ${d.started_collections || d.resumed || 0} bộ còn lại!`, "success");
+
+      const resPanel = $("#results-panel");
+      if (resPanel) {
+        resPanel.hidden = false;
+        resPanel.scrollIntoView({ behavior: "smooth" });
+      }
+
+      startPolling();
+    } catch (err) {
+      showToast("Lỗi kết nối khi chạy tiếp", "error");
+    }
+    return;
+  }
+
   const queueCount = state.stagedQueue.length;
   const isDirect = (queueCount === 0);
 
@@ -1291,13 +1350,14 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
   const isBulk = queueCount > 1 || (isDirect && promptCount > 1);
 
   if (queueCount > 0) {
-    // Chạy các Collection trong Hàng Đợi (Staged Queue)
     const profiles = [...state.selectedFleetProfiles];
     closeAccModal();
+    state.isStopped = false;
 
     const payload = {
       profiles: profiles.length ? profiles : state.profiles.map(p => p.name),
-      collections: state.stagedQueue
+      collections: state.stagedQueue,
+      skip_done: $("#skip-done")?.checked !== false
     };
 
     try {
@@ -1334,6 +1394,7 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
     if (!state.genProfile) return;
     localStorage.setItem("genProfile", state.genProfile);
     closeAccModal();
+    state.isStopped = false;
 
     const payload = {
       templates: [...state.selected],
@@ -1375,6 +1436,7 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
       return;
     }
     closeAccModal();
+    state.isStopped = false;
 
     const payload = {
       profiles: profiles,
@@ -1401,8 +1463,7 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
       const skipMsg = d.skipped_jobs
         ? ` (bỏ qua ${d.skipped_jobs} ảnh đã có${d.skipped_collections ? `, ${d.skipped_collections} bộ trọn vẹn` : ""})`
         : "";
-      showToast(`Bắt đầu: ${d.started_collections} collection trên ` +
-                `${d.profiles.length} tài khoản${skipMsg}`, "success");
+      showToast(`Bắt đầu: ${d.started_collections} collection trên ${d.profiles.length} tài khoản${skipMsg}`, "success");
 
       const resPanel = $("#results-panel");
       if (resPanel) {
@@ -1416,6 +1477,86 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
     }
   }
 });
+
+function updateBatchMonitor(isRunning) {
+  const card = $("#batch-progress-card");
+  if (!card) return;
+  const cols = state.collections || [];
+  if (cols.length === 0) {
+    card.hidden = true;
+    return;
+  }
+  card.hidden = false;
+
+  const total = cols.length;
+  const done = cols.filter(c => c.status === "done" || (c.done_count && c.done_count >= c.total_count)).length;
+  const remaining = total - done;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  const badge = $("#batch-badge");
+  const text = $("#batch-status-text");
+  const fill = $("#batch-subtrack-fill");
+  const resumeBtn = $("#btn-resume-batch");
+
+  if (badge) badge.textContent = `${done} / ${total} Bộ`;
+  if (fill) fill.style.width = `${pct}%`;
+
+  if (isRunning) {
+    if (text) text.textContent = `⚡ Đang gen: Hoàn thành ${done}/${total} bộ (${pct}%). Còn ${remaining} bộ...`;
+    if (resumeBtn) resumeBtn.hidden = true;
+  } else if (state.isStopped) {
+    if (text) text.textContent = `🛑 Đã dừng khẩn cấp: ${done}/${total} bộ hoàn thành. Còn ${remaining} bộ chưa xong.`;
+    if (resumeBtn) {
+      resumeBtn.hidden = (remaining === 0);
+      resumeBtn.textContent = `▶ Chạy tiếp ${remaining} bộ còn lại`;
+    }
+  } else if (remaining === 0) {
+    if (text) text.textContent = `🎉 Hoàn thành xuất sắc 100% (${total}/${total} bộ)!`;
+    if (resumeBtn) resumeBtn.hidden = true;
+  } else {
+    const hasExhausted = (state.exhaustedProfiles && state.exhaustedProfiles.length > 0);
+    if (hasExhausted) {
+      if (text) text.textContent = `⚠️ Hết lượt/token tài khoản! Đã tạo ${done}/${total} bộ. Còn ${remaining} bộ cần chạy tiếp.`;
+    } else {
+      if (text) text.textContent = `Tiến độ đợt: Đã tạo ${done}/${total} bộ. Còn ${remaining} bộ chưa xong (có thể chạy tiếp).`;
+    }
+    if (resumeBtn) {
+      resumeBtn.hidden = false;
+      resumeBtn.textContent = `▶ Chạy tiếp ${remaining} bộ còn lại`;
+    }
+  }
+}
+
+async function triggerEmergencyStop() {
+  try {
+    const res = await fetch("/api/jobs/stop", { method: "POST" });
+    const d = await res.json();
+    state.isStopped = true;
+    showToast(`🛑 Đã dừng khẩn cấp! (Dừng tại: ${d.stopped_at || "tiến trình"})`, "warn");
+
+    const stopBtn = $("#btn-emergency-stop");
+    const stopResultsBtn = $("#btn-stop-results");
+    if (stopBtn) stopBtn.hidden = true;
+    if (stopResultsBtn) stopResultsBtn.hidden = true;
+
+    if (state.polling) {
+      clearInterval(state.polling);
+      state.polling = null;
+    }
+
+    const resJobs = await fetch("/api/jobs");
+    const dj = await resJobs.json();
+    state.jobs = dj.jobs || [];
+    state.collections = dj.collections || [];
+    if (state.collections.length > 0) renderCollections(state.collections);
+    else renderResults(state.jobs);
+
+    updateRunMatrix();
+    updateBatchMonitor(false);
+  } catch (err) {
+    showToast("Lỗi khi gửi lệnh dừng", "error");
+  }
+}
 
 
 // ==========================================================================
@@ -1433,6 +1574,7 @@ function startPolling() {
       state.collections = d.collections || [];
       state.fleet = d.fleet || {};
       state.runProfile = d.profile || null;
+      state.exhaustedProfiles = d.exhausted || [];
       renderNotices(d.exhausted || [], d.warnings || []);
 
       renderFleetBar(d.fleet, d.exhausted || []);
@@ -1443,14 +1585,40 @@ function startPolling() {
         renderResults(state.jobs);
       }
 
-      const isJobsRunning = state.jobs.some(j => ["pending", "running"].includes(j.status));
-      const isColsRunning = state.collections.some(c => ["pending", "running"].includes(c.status));
-      const isRunning = d.active || isJobsRunning || isColsRunning;
+      const hasCollections = state.collections && state.collections.length > 0;
+      const isColsRunning = hasCollections && state.collections.some(c => ["pending", "running"].includes(c.status));
+      const hasJobs = state.jobs && state.jobs.length > 0;
+      const isJobsRunning = hasJobs && state.jobs.some(j => ["pending", "running"].includes(j.status));
+      const hasWork = hasCollections || hasJobs;
+
+      const isRunning = hasWork ? (isColsRunning || isJobsRunning) : Boolean(d.active);
+
+      const stopBtn = $("#btn-emergency-stop");
+      const stopResultsBtn = $("#btn-stop-results");
+      if (isRunning) {
+        if (stopBtn) stopBtn.hidden = false;
+        if (stopResultsBtn) stopResultsBtn.hidden = false;
+      } else {
+        if (stopBtn) stopBtn.hidden = true;
+        if (stopResultsBtn) stopResultsBtn.hidden = true;
+      }
+
+      updateBatchMonitor(isRunning);
+
+      if (d.stopped) {
+        clearInterval(state.polling);
+        state.polling = null;
+        state.isStopped = true;
+        updateRunMatrix();
+        updateBatchMonitor(false);
+        return;
+      }
 
       if (!isRunning) {
         clearInterval(state.polling);
         state.polling = null;
         updateRunMatrix();
+        updateBatchMonitor(false);
         showToast("Đã hoàn thành!", "success");
       }
     } catch (err) {
@@ -1772,21 +1940,35 @@ async function init() {
     state.collections = d.collections || [];
     state.fleet = d.fleet || {};
 
-    if (state.collections && state.collections.length > 0) {
+    const hasCollections = state.collections && state.collections.length > 0;
+    const isColsRunning = hasCollections && state.collections.some(c => ["pending", "running"].includes(c.status));
+    const hasJobs = state.jobs && state.jobs.length > 0;
+    const isJobsRunning = hasJobs && state.jobs.some(j => ["pending", "running"].includes(j.status));
+    const hasWork = hasCollections || hasJobs;
+    const isRunning = hasWork ? (isColsRunning || isJobsRunning) : Boolean(d.active);
+
+    if (hasCollections) {
       renderCollections(state.collections);
       renderFleetBar(d.fleet, d.exhausted || []);
       const resPanel = $("#results-panel");
       if (resPanel) resPanel.hidden = false;
-      const isRunning = d.active || state.collections.some(c => ["pending", "running"].includes(c.status));
+      updateBatchMonitor(isRunning);
       if (isRunning) startPolling();
-    } else if (state.jobs && state.jobs.length > 0) {
+    } else if (hasJobs) {
       renderResults(state.jobs);
       const resPanel = $("#results-panel");
       if (resPanel) resPanel.hidden = false;
-      const isRunning = d.active || state.jobs.some(j => ["pending", "running"].includes(j.status));
       if (isRunning) startPolling();
     }
   } catch (err) {}
+  $("#btn-emergency-stop")?.addEventListener("click", triggerEmergencyStop);
+  $("#btn-stop-results")?.addEventListener("click", triggerEmergencyStop);
+  $("#btn-resume-batch")?.addEventListener("click", () => {
+    const cols = state.collections || [];
+    const done = cols.filter(c => c.status === "done" || (c.done_count && c.done_count >= c.total_count)).length;
+    const remaining = cols.length - done;
+    openAccModal(true, remaining);
+  });
 }
 
 init();

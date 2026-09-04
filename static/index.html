@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=45">
+  <link rel="stylesheet" href="style.css?v=46">
 </head>
 <body>
   <!-- Ambient backdrop glows -->
@@ -255,7 +255,28 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             Tải ZIP trọn bộ
           </a>
+          <button type="button" id="btn-stop-results" class="btn danger sm" hidden title="Dừng khẩn cấp toàn bộ tác vụ đang chạy">
+            🛑 Dừng khẩn cấp
+          </button>
           <button id="btn-clear-jobs" class="btn ghost sm">Xoá</button>
+        </div>
+      </div>
+
+      <!-- Batch Progress & Resumption Card -->
+      <div id="batch-progress-card" class="batch-progress-card" hidden>
+        <div class="batch-prog-header">
+          <div class="batch-prog-title-group">
+            <span class="batch-badge" id="batch-badge">0 / 0 Bộ</span>
+            <span class="batch-status-text" id="batch-status-text">Đang giám sát tiến độ...</span>
+          </div>
+          <div class="batch-prog-actions" id="batch-prog-actions">
+            <button type="button" id="btn-resume-batch" class="btn primary sm glow-btn" hidden title="Chạy tiếp các bộ chưa xong sau khi hết token hoặc dừng">
+              ▶ Chạy tiếp các bộ còn lại
+            </button>
+          </div>
+        </div>
+        <div class="batch-subtrack-bar">
+          <div class="batch-subtrack-fill" id="batch-subtrack-fill" style="width: 0%;"></div>
         </div>
       </div>
 
@@ -335,6 +356,11 @@
         <span>+ Thêm hàng đợi</span>
       </button>
 
+      <!-- Nút Dừng Khẩn Cấp -->
+      <button type="button" id="btn-emergency-stop" class="btn danger sm glow-danger" hidden title="Dừng ngay lập tức toàn bộ tiến trình đang chạy">
+        <span>🛑 Dừng khẩn cấp</span>
+      </button>
+
       <!-- Nút Chạy chính -->
       <button type="button" id="run-btn" class="btn primary glow-btn" disabled>
         <span id="run-btn-text">Tạo Mockup</span>
@@ -398,6 +424,7 @@
         đồng nhất design.
       </p>
       <div id="acc-modal-list" class="acc-pick-list"></div>
+
       <label class="skip-done-row" title="Thư mục nào đã có ảnh thì bỏ qua, chỉ gen phần còn thiếu">
         <input type="checkbox" id="skip-done" checked>
         <span>Bỏ qua ảnh đã có (gen tiếp phần còn thiếu)</span>
@@ -426,6 +453,6 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=45"></script>
+  <script src="app.js?v=48"></script>
 </body>
 </html>
