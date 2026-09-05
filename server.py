@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import re
 import sys
 import threading
@@ -393,14 +394,18 @@ def _folder_has_image(folder: str) -> bool:
 
 
 def _out_folder(template_name: str, topic: str = "", design: str = "Design") -> str:
-    """Cấu trúc thư mục: <design_folder>/<ProductType>__<Topic>__<Design>
-    Ví dụ: NCAA/T-Shirt__NCAA__Vintage hoặc cute-cat/T-Shirt__cute-cat__Vintage
-    """
+    """Cấu trúc thư mục: PHẲNG, mọi bộ nằm thẳng trong designs/.
+
+        designs/Mug__Alabama-Girl__Maximalist
+        designs/Tote-Bag__Alabama-Girl__Maximalist
+        designs/T-Shirt__Arkansas-Girl__Maximalist
+
+    Trước đây còn lồng thêm một cấp <Topic>/ ở ngoài; bỏ đi để mở designs/ là
+    thấy hết mọi bộ, khỏi phải chui từng thư mục chủ đề."""
     top = _name_part(topic, "Topic")
     des = _name_part(design, "Design")
     pt = _product_type(template_name)
-    mockup_folder = f"{pt}__{top}__{des}"
-    return f"{top}/{mockup_folder}"
+    return f"{pt}__{top}__{des}"
 
 
 # Tên file/thư mục Windows không được trùng mấy tên thiết bị này
@@ -1227,7 +1232,7 @@ def delete_profile(name: str):
 
 
 # =============================================================== đăng nhập hàng loạt
-BULK = {"active": False, "items": [], "started": 0}
+BULK = {"active": False, "items": [], "started": 0, "boxes": {}}
 
 
 def _next_profile_name(taken: set[str]) -> str:
@@ -1237,40 +1242,67 @@ def _next_profile_name(taken: set[str]) -> str:
     return f"acc{i}"
 
 
-def _bulk_worker(jobs: list[tuple[str, dict]]):
-    """Đăng nhập LẦN LƯỢT từng tài khoản.
+_PROF_LOCK = threading.Lock()      # nhiều luồng đăng nhập cùng ghi config.yaml
 
-    Cố tình không chạy song song: mỗi lượt mở một cửa sổ Chrome thật, bật một loạt
-    cùng lúc vừa nặng máy vừa giống hệt hành vi bị OpenAI gắn cờ.
-    """
+
+def _bulk_conf() -> tuple[int, float]:
+    """(số cửa sổ chạy song song, giãn cách lúc bật). 0 = mở hết cùng lúc."""
+    c = load_cfg().get("login", {}) or {}
+    return int(c.get("parallel", 0) or 0), float(c.get("stagger_seconds", 2) or 0)
+
+
+def _tile(idx: int, total: int) -> list[str]:
+    """Xếp các cửa sổ Chrome thành lưới cho khỏi chồng lên nhau.
+
+    Đăng nhập song song mà mọi cửa sổ nằm đè một chỗ thì lúc trang đòi xác minh
+    người thật, người dùng không biết cái nào là cái nào."""
+    if total <= 1:
+        return ["--window-size=1400,950", "--window-position=40,20"]
+    cols = math.ceil(math.sqrt(total))
+    rows = math.ceil(total / cols)
+    w, h = max(560, 1920 // cols), max(460, 1040 // rows)
+    x, y = (idx % cols) * w, (idx // cols) * h
+    return [f"--window-size={w},{h}", f"--window-position={x},{y}"]
+
+
+def _bulk_one(idx: int, name: str, creds: dict, total: int, sem: threading.Semaphore):
+    """Đăng nhập MỘT tài khoản trong cửa sổ Chrome riêng của nó."""
     from playwright.sync_api import sync_playwright
 
-    for idx, (name, creds) in enumerate(jobs):
-        item = BULK["items"][idx]
+    item = BULK["items"][idx]
+    with sem:
+        if not BULK["active"]:            # đã bị huỷ trước khi tới lượt
+            item["status"] = "failed"
+            item["error"] = "Đã huỷ"
+            creds.clear()
+            return
         item["status"] = "running"
         udir = _profiles_dir() / name
         udir.mkdir(parents=True, exist_ok=True)
         box = {"phase": "starting", "needs_human": False, "error": None}
+        BULK["boxes"][name] = box         # UI đọc được đang ở bước nào
         try:
             with sync_playwright() as pw:
                 ctx = pw.chromium.launch_persistent_context(
                     user_data_dir=str(udir), headless=False, channel="chrome",
-                    viewport={"width": 1400, "height": 950},
+                    no_viewport=True,
                     args=["--disable-blink-features=AutomationControlled",
-                          "--no-first-run", "--no-default-browser-check"])
+                          "--no-first-run", "--no-default-browser-check",
+                          *_tile(idx, total)])
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
                 page.goto("https://chatgpt.com/", wait_until="domcontentloaded",
                           timeout=90_000)
                 ok = auth_login.auto_login(page, creds, box, _check_logged_in)
                 if ok:
-                    profs = _get_profiles()
-                    if not any(x["name"] == name for x in profs):
-                        profs.append({"name": name, "tabs": 1,
-                                      "email": creds["email"]})
-                        _save_profiles(profs)
+                    with _PROF_LOCK:      # đọc-sửa-ghi config.yaml phải một mình
+                        profs = _get_profiles()
+                        if not any(x["name"] == name for x in profs):
+                            profs.append({"name": name, "tabs": 1,
+                                          "email": item["email"]})
+                            _save_profiles(profs)
                     item["status"] = "done"
                     log.info("[%s] Đăng nhập tự động thành công (%s).",
-                             name, creds["email"])
+                             name, item["email"])
                 else:
                     item["status"] = "needs_human" if box.get("needs_human") else "failed"
                     item["error"] = box.get("error") or "Cần bạn xác minh thủ công"
@@ -1281,13 +1313,43 @@ def _bulk_worker(jobs: list[tuple[str, dict]]):
             item["error"] = str(e)[:200]
             log.warning("[%s] Đăng nhập hàng loạt lỗi: %s", name, e)
         finally:
-            creds.clear()          # xoá mật khẩu khỏi RAM ngay khi dùng xong
-            jobs[idx] = (name, {})
-        time.sleep(2)
+            creds.clear()      # xoá mật khẩu khỏi RAM ngay khi dùng xong
+            item["phase"] = box.get("phase")
+            BULK["boxes"].pop(name, None)
+
+
+def _bulk_worker(jobs: list[tuple[str, dict]]):
+    """Đăng nhập SONG SONG: mỗi tài khoản một cửa sổ Chrome riêng.
+
+    Trước đây chạy lần lượt cho nhẹ máy; máy nhiều RAM thì mở hết cùng lúc nhanh
+    hơn hẳn (10 tài khoản: ~1 phút thay vì ~10 phút), và lúc trang đòi xác minh
+    người thật thì bạn xử lý mấy cửa sổ một lượt. Vẫn giãn cách vài giây giữa các
+    lần bật để Chrome không nghẽn ổ đĩa và các request không dội ra cùng một nhịp.
+
+    `login.parallel` trong config.yaml giới hạn số cửa sổ chạy cùng lúc (0 = hết).
+    """
+    total = len(jobs)
+    limit, stagger = _bulk_conf()
+    sem = threading.Semaphore(limit if limit > 0 else total)
+    log.info("Đăng nhập hàng loạt %d tài khoản, %s cửa sổ song song.",
+             total, limit if limit > 0 else "tất cả")
+
+    threads = []
+    for idx, (name, creds) in enumerate(jobs):
+        t = threading.Thread(target=_bulk_one,
+                             args=(idx, name, creds, total, sem), daemon=True)
+        t.start()
+        threads.append(t)
+        jobs[idx] = (name, {})
+        if stagger and idx + 1 < total:
+            time.sleep(stagger)
+    for t in threads:
+        t.join()
 
     BULK["active"] = False
+    BULK["boxes"].clear()
     done = sum(1 for x in BULK["items"] if x["status"] == "done")
-    log.info("Đăng nhập hàng loạt xong: %d/%d tài khoản.", done, len(BULK["items"]))
+    log.info("Đăng nhập hàng loạt xong: %d/%d tài khoản.", done, total)
 
 
 @app.post("/api/profiles/bulk-login")
@@ -1335,14 +1397,24 @@ def bulk_login(payload: dict):
     if not jobs:
         raise HTTPException(400, "Chưa dán tài khoản nào.")
 
-    BULK.update({"active": True, "items": items, "started": time.time()})
+    BULK.update({"active": True, "items": items, "started": time.time(),
+                 "boxes": {}})
     threading.Thread(target=_bulk_worker, args=(jobs,), daemon=True).start()
     return {"started": len(jobs), "skipped": bad, "items": items}
 
 
 @app.get("/api/profiles/bulk-login/status")
 def bulk_login_status():
-    return {"active": BULK["active"], "items": BULK["items"]}
+    # Chạy song song thì cần biết TỪNG cửa sổ đang ở bước nào (nhất là cái nào
+    # đang đòi xác minh người thật) chứ không chỉ "đang chạy".
+    boxes = BULK.get("boxes", {})
+    items = []
+    for it in BULK["items"]:
+        b = boxes.get(it["profile"])
+        items.append({**it,
+                      "phase": (b or {}).get("phase") or it.get("phase"),
+                      "needs_human": bool((b or {}).get("needs_human"))})
+    return {"active": BULK["active"], "items": items}
 
 
 @app.post("/api/profiles/{name}/login")

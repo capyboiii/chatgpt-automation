@@ -101,25 +101,51 @@ POLL_JS = """() => {
 
 # Thứ tự ảnh theo DOM trong lượt trả lời. Dùng để xếp ảnh đúng thứ tự ChatGPT bày
 # ra: response tải song song nên thứ tự về không đáng tin, còn DOM thì ổn định.
-ORDER_JS = """() => {
+ORDER_JS = r"""() => {
+    // CHỈ tin nhắn trả lời CUỐI CÙNG có ảnh. Quét cả hội thoại thì ảnh của mấy
+    // lô trước cũng lọt vào bảng thứ tự, mà lô nào cũng có ảnh -> lệch chỗ.
     const asst = Array.from(
         document.querySelectorAll('[data-message-author-role="assistant"]'));
-    const roots = asst.length ? asst : [document.querySelector('main') || document.body];
-    const keys = [];
-    const seen = new Set();
-    for (const root of roots) {
-        for (const im of root.querySelectorAll('img')) {
-            if (im.closest('form')) continue;
-            const src = im.currentSrc || im.src || '';
-            if (!src) continue;
-            const key = src.split('?')[0];
-            if (seen.has(key)) continue;
-            seen.add(key);
-            keys.push(key);
-        }
+    let root = null;
+    for (let i = asst.length - 1; i >= 0; i--) {
+        if (asst[i].querySelector('img')) { root = asst[i]; break; }
     }
-    return keys;
+    if (!root) root = document.querySelector('main') || document.body;
+    const out = [];
+    for (const im of root.querySelectorAll('img')) {
+        if (im.closest('form')) continue;
+        // Trả TẤT CẢ url ứng viên: <img> hay đổi giữa currentSrc / src / srcset
+        // (bản thumbnail vs bản gốc), khớp đúng một cái là đủ nhận ra ảnh.
+        const cands = [];
+        if (im.currentSrc) cands.push(im.currentSrc);
+        if (im.src) cands.push(im.src);
+        for (const part of (im.getAttribute('srcset') || '').split(',')) {
+            const u = part.trim().split(/\s+/)[0];
+            if (u) cands.push(u);
+        }
+        if (!cands.length) continue;
+        const r = im.getBoundingClientRect();
+        out.push({urls: cands, w: Math.round(r.width), h: Math.round(r.height)});
+    }
+    return out;
 }"""
+
+
+def _img_key(url: str) -> str:
+    """Khoá nhận dạng một ảnh, chịu được việc URL đổi dạng.
+
+    Cùng một ảnh nhưng tầng mạng thấy '.../files/file-AbC123/raw?se=...&sig=...'
+    còn DOM lại bày '.../files/file-AbC123/thumb' - so nguyên đường dẫn là trượt,
+    rồi rơi xuống nhánh đoán mò và đặt sai tên file. File-id thì luôn giống nhau.
+    """
+    u = (url or "").split("#")[0]
+    m = re.search(r"file[-_][A-Za-z0-9]{6,}", u)
+    if m:
+        return m.group(0)
+    m = re.search(r"[?&]file_id=([^&]+)", u)
+    if m:
+        return m.group(1)
+    return u.split("?")[0].rsplit("/", 1)[-1] or u
 
 
 # ---- mức độ suy nghĩ (đọc từ DOM thật, 2026-09) ----------------------------
@@ -341,6 +367,14 @@ class QuotaExceeded(RuntimeError):
 
 class NoImage(RuntimeError):
     """Gửi được nhưng không nhận được ảnh (từ chối, lỗi, hoặc quá giờ)."""
+
+
+class Refused(NoImage):
+    """ChatGPT từ chối vì nội dung/chính sách.
+
+    Tách riêng khỏi NoImage vì cách xử KHÁC HẲN: lỗi tạm thì xin làm lại có cơ
+    hội qua, còn từ chối thì gửi lại đúng prompt đó bao nhiêu lần cũng bị từ chối
+    y như vậy - retry chỉ tổ mất mấy phút rồi vẫn fail."""
 
 
 def _classify(text: str) -> tuple[str, str]:
@@ -934,16 +968,32 @@ class ChatGPTPool:
         if kind == "quota":
             raise QuotaExceeded(f"tài khoản hết lượt tạo ảnh — {msg}")
         if kind == "refused":
-            raise NoImage(f"ChatGPT từ chối tạo ảnh — {msg}")
+            raise Refused(f"ChatGPT từ chối tạo ảnh — {msg}")
         if kind == "error":
             raise NoImage(f"ChatGPT báo lỗi — {msg}")
 
-    async def _dom_keys(self, page: Page) -> list[str]:
-        """URL (bỏ query) của các ảnh ĐANG hiện trong câu trả lời, theo thứ tự."""
+    async def _dom_order(self, page: Page) -> dict[str, int]:
+        """khoá ảnh -> vị trí, theo ĐÚNG thứ tự ảnh hiện trong câu trả lời cuối.
+
+        Đây là căn cứ duy nhất đáng tin để biết ảnh nào ứng với template nào:
+        ChatGPT bày ảnh theo đúng thứ tự file mình đính kèm, còn thứ tự response
+        về thì không - trình duyệt tải mấy ảnh song song, ảnh nhẹ về trước."""
         try:
-            return await page.evaluate(ORDER_JS)
+            items = await page.evaluate(ORDER_JS)
         except Exception:  # noqa: BLE001
-            return []
+            return {}
+        rank: dict[str, int] = {}
+        idx = 0
+        for it in items or []:
+            if 0 < (it.get("w") or 0) < 64:      # avatar / icon
+                continue
+            keys = {_img_key(u) for u in it.get("urls") or [] if u}
+            if not keys or any(k in rank for k in keys):
+                continue                          # cùng một ảnh bày hai chỗ
+            for k in keys:
+                rank[k] = idx
+            idx += 1
+        return rank
 
     async def _finalize(self, page: Page, shots: list[_Shot], want: int) -> list[_Shot]:
         """Chốt danh sách ảnh: xếp đúng thứ tự và bỏ ảnh thừa.
@@ -957,10 +1007,20 @@ class ChatGPTPool:
         """
         if len(shots) <= 1:
             return shots
-        keys = await self._dom_keys(page)
-        rank = {k: i for i, k in enumerate(keys)}
-        on_screen = [sh for sh in shots if sh.url.split("?")[0] in rank]
-        on_screen.sort(key=lambda sh: rank[sh.url.split("?")[0]])
+
+        # DOM có thể còn đang gắn ảnh (lazy-load) ngay lúc mình chốt. Chờ thêm vài
+        # nhịp còn hơn rơi xuống nhánh đoán mò - nhánh đó xếp theo thứ tự response
+        # về, tức là sai thứ tự upload, tức là đặt nhầm tên giữa các loại sản phẩm.
+        rank: dict[str, int] = {}
+        on_screen: list[_Shot] = []
+        for attempt in range(4):
+            rank = await self._dom_order(page)
+            on_screen = [sh for sh in shots if _img_key(sh.url) in rank]
+            on_screen.sort(key=lambda sh: rank[_img_key(sh.url)])
+            if len(on_screen) >= min(want, len(shots)):
+                break
+            if attempt < 3:
+                await page.wait_for_timeout(1_200)
 
         if len(on_screen) >= want:
             if len(shots) > want:
@@ -970,13 +1030,18 @@ class ChatGPTPool:
 
         # DOM thiếu (ảnh lazy-load, DOM đổi cấu trúc...) -> ghép nốt theo thứ tự
         # response, và chỉ tới lúc này mới phải suy đoán bằng dung lượng.
-        rest = sorted((sh for sh in shots if sh.url.split("?")[0] not in rank),
+        rest = sorted((sh for sh in shots if _img_key(sh.url) not in rank),
                       key=lambda sh: sh.ts)
         merged = on_screen + rest
+        if rest:
+            # Cảnh báo to: từ đây trở xuống thứ tự là thứ tự RESPONSE VỀ, không
+            # đảm bảo trùng thứ tự upload -> ảnh có thể bị gán nhầm template.
+            log.warning("DOM chỉ nhận ra %d/%d ảnh - %d ảnh phải xếp theo thứ tự "
+                        "response, có nguy cơ gán nhầm template.",
+                        len(on_screen), len(shots), len(rest))
         if len(merged) <= want:
             return merged
-        log.warning("DOM chỉ thấy %d/%d ảnh - đành giữ %d ảnh nặng nhất (%s KB).",
-                    len(on_screen), want, want,
+        log.warning("Giữ %d ảnh nặng nhất trong %d ảnh (%s KB).", want, len(merged),
                     ", ".join(str(len(sh.data or b"") // 1024) for sh in merged))
         heavy = sorted(merged, key=lambda sh: len(sh.data or b""), reverse=True)[:want]
         keep = {id(sh) for sh in heavy}
@@ -1136,6 +1201,28 @@ class ChatGPTPool:
         return False
 
     # ---------------- chạy 1 lượt: TẤT CẢ ảnh trong cùng 1 chat ----------------
+    async def _handoff(self, slot: _Slot, col: dict, reason: str,
+                       on_update: UpdateCb = None) -> bool:
+        """Bỏ tài khoản này, trả collection về hàng đợi cho tài khoản khác làm.
+
+        Dùng cho mọi kiểu "slot hỏng": đứng hình, tab chết, lỗi ngoài dự kiến.
+        Job chưa xong phải quay về `pending` - để nguyên `running` là UI quay mãi
+        mà chẳng worker nào nhận lại."""
+        self.stalled[slot.profile] = reason
+        log.error("[%s] %s -> chuyển collection '%s' sang tài khoản khác.",
+                  slot.label, reason, col.get("name"))
+        for j in col.get("jobs", []):
+            if j.get("status") != "done":
+                j["status"] = "pending"
+                j["error"] = None
+                if on_update:
+                    res = on_update(j)
+                    if asyncio.iscoroutine(res):
+                        await res
+        col["status"] = "pending"
+        col["worker"] = None
+        return False
+
     async def _run_collection_on_slot(
         self,
         slot: _Slot,
@@ -1186,9 +1273,10 @@ class ChatGPTPool:
                  slot.label, col.get("name"), len(pending_jobs), len(chunks), slot.profile)
 
         quota: str | None = None
+        refused: str | None = None      # bị từ chối vì nội dung -> khỏi thử tiếp
         stall_since = asyncio.get_event_loop().time()   # mốc để phát hiện đứng hình
         for ci, chunk in enumerate(chunks):
-            if quota or self.stopped:
+            if quota or refused or self.stopped:
                 break
             for j in chunk:
                 j["status"] = "running"
@@ -1200,7 +1288,7 @@ class ChatGPTPool:
             last_err: Exception | None = None
 
             for round_no in range(1, self.max_retries + 2):
-                if not pending or quota or self.stopped:
+                if not pending or quota or refused or self.stopped:
                     break
                 tpls = [Path(j["template"]) for j in pending]
                 if slot.net:
@@ -1225,12 +1313,21 @@ class ChatGPTPool:
                     quota = str(e)
                     imgs = e.images               # ảnh kịp nhận trước khi bị chặn
                     log.error("[%s] %s", slot.label, quota)
+                except Refused as e:
+                    # Từ chối vì nội dung: gửi lại y hệt cũng bị từ chối y hệt.
+                    refused = str(e)
+                    log.error("[%s] col '%s': %s", slot.label, col.get("name"), refused)
+                    break
                 except Exception as e:  # noqa: BLE001
                     last_err = e
                     log.warning("[%s] col '%s' lô %d/%d vòng %d lỗi: %s",
                                 slot.label, col.get("name"), ci + 1, len(chunks), round_no, e)
                     if _is_dead(e):
-                        break
+                        # Tab/trình duyệt đã chết: thử lại trên page này vô nghĩa, mà
+                        # để slot chạy tiếp là nó nuốt nốt các collection sau rồi fail
+                        # sạch trong vài giây. Bỏ hẳn tài khoản, đẩy việc sang acc khác.
+                        return await self._handoff(
+                            slot, col, f"tab/trình duyệt đã chết ({e})", on_update)
                     have = list(slot.net.shots()) if slot.net else []
                     if not have:
                         try:
@@ -1252,39 +1349,41 @@ class ChatGPTPool:
                         ok = await self._save(page, shot, Path(j["dest"]))
                     except Exception as e:  # noqa: BLE001
                         last_err = e
-                    j["status"] = "done" if ok else "failed"
-                    j["error"] = None if ok else "tải ảnh về thất bại"
                     if ok:
+                        j["status"] = "done"
+                        j["error"] = None
                         stall_since = asyncio.get_event_loop().time()   # còn sống
+                    else:
+                        # Nhận được ảnh nhưng ghi ra đĩa hỏng (mạng đứt lúc tải lại,
+                        # ổ đầy...). Giữ job ở "running" để vòng sau xin gen lại -
+                        # trước đây đánh "failed" ngay là mất luôn ảnh đó dù còn dư
+                        # mấy vòng retry.
+                        j["error"] = "tải ảnh về thất bại, đang xin gen lại"
+                        last_err = last_err or RuntimeError("tải ảnh về thất bại")
                     await emit(j)
 
-                pending = pending[len(imgs):]
+                # Cắt theo TRẠNG THÁI chứ không theo số ảnh nhận được: job lưu hỏng
+                # phải nằm lại trong `pending` để còn được làm lại.
+                pending = [j for j in pending if j.get("status") != "done"]
 
                 # ĐỨNG HÌNH: quá stall_timeout mà chưa ra nổi ảnh nào (thường là
                 # không đính kèm được, hoặc trang treo). Thử lại thêm mấy vòng nữa
                 # cũng vô ích và mất hàng phút - bỏ tài khoản, đẩy việc sang acc khác.
                 idle = asyncio.get_event_loop().time() - stall_since
-                if pending and not quota and idle > self.stall_timeout:
-                    self.stalled[slot.profile] = (
+                if pending and not quota and not refused and idle > self.stall_timeout:
+                    return await self._handoff(
+                        slot, col,
                         f"đứng hình {int(idle)}s không ra ảnh nào "
-                        f"({last_err or 'không rõ nguyên nhân'})")
-                    log.error("[%s] %s -> chuyển collection '%s' sang tài khoản khác.",
-                              slot.label, self.stalled[slot.profile], col.get("name"))
-                    for j in pending:
-                        j["status"] = "pending"
-                        j["error"] = None
-                        await emit(j)
-                    col["status"] = "pending"
-                    return False
+                        f"({last_err or 'không rõ nguyên nhân'})", on_update)
 
-                if pending and not quota and round_no <= self.max_retries:
+                if pending and not quota and not refused and round_no <= self.max_retries:
                     log.warning("[%s] col '%s' còn thiếu %d ảnh -> xin ChatGPT làm nốt.",
                                 slot.label, col.get("name"), len(pending))
                     await asyncio.sleep(2)
 
             for j in pending:
                 j["status"] = "failed"
-                j["error"] = quota or (
+                j["error"] = quota or refused or (
                     str(last_err) if last_err else
                     "ChatGPT không trả đủ ảnh sau nhiều lần xin làm nốt")
                 await emit(j)
@@ -1295,7 +1394,7 @@ class ChatGPTPool:
         for j in jobs:
             if j.get("status") in (None, "pending", "running"):
                 j["status"] = "failed"
-                j["error"] = quota or "Lượt gen dừng giữa chừng"
+                j["error"] = quota or refused or "Lượt gen dừng giữa chừng"
                 await emit(j)
 
         if self.stopped:
@@ -1306,6 +1405,13 @@ class ChatGPTPool:
                     j["error"] = "Dừng khẩn cấp"
                     await emit(j)
             return False
+
+        if refused:
+            # Không phải lỗi tài khoản -> KHÔNG đánh dấu hết lượt, tài khoản vẫn
+            # nhận collection khác bình thường.
+            col["status"] = "partial" if any(j["status"] == "done" for j in jobs) else "failed"
+            col["error"] = refused
+            return True
 
         if quota:
             self.exhausted[slot.profile] = quota
@@ -1465,12 +1571,32 @@ class ChatGPTPool:
                     })
 
                 ok = False
+                crashed = False
                 try:
                     ok = await self._run_collection_on_slot(slot, page, col, on_update=on_update)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as e:  # noqa: BLE001
+                    # Lỗi ngoài dự kiến (page.evaluate vỡ, callback UI ném...) giết
+                    # worker trong khi collection ĐÃ RỜI hàng đợi: đợt dọn cuối của
+                    # run_collections không với tới nó, job kẹt "running" vĩnh viễn
+                    # và UI quay mãi. Trả collection về hàng đợi rồi mới nghỉ.
+                    crashed = True
+                    log.exception("[%s] Worker lỗi khi chạy collection '%s': %s",
+                                  slot.label, col.get("name"), e)
+                    await self._handoff(slot, col, f"worker lỗi ({e})", on_update)
+                    await self.collection_queue.put(col)
+                    if on_fleet_update:
+                        on_fleet_update(profile, {"status": "error",
+                                                  "error": str(e)[:200],
+                                                  "collection": None})
                 finally:
                     busy_slots.discard(slot)
                     self._last_active_time = loop.time()
                     self.collection_queue.task_done()
+
+                if crashed:
+                    break        # slot đã bị đánh dấu hỏng, nhường việc cho acc khác
 
                 if not ok and not self.stopped and self.blocked(profile):
                     if on_fleet_update:

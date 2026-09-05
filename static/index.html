@@ -83,7 +83,7 @@
         </div>
 
         <button type="button" id="open-bulk-login" class="btn primary-subtle sm"
-                title="Dán nhiều tài khoản, tool tự đăng nhập lần lượt">
+                title="Dán nhiều tài khoản, tool mở song song mỗi tài khoản một cửa sổ Chrome">
           ⚡ Đăng nhập hàng loạt
         </button>
 
@@ -190,6 +190,10 @@
           <div class="panel-head-actions">
             <button type="button" id="btn-select-all-prompts" class="btn action-btn sm" title="Chọn tất cả để tạo Collections hàng loạt">
               Chọn tất cả
+            </button>
+            <button type="button" id="btn-prompt-template" class="btn action-btn sm"
+                    title="Sửa khuôn prompt dùng chung cho mọi lượt gen (data/prompt_template.txt)">
+              Khuôn prompt
             </button>
             <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
             <button type="button" id="btn-import-csv" class="btn action-btn sm"
@@ -370,6 +374,31 @@
 
   <!-- LIGHTBOX MODAL -->
   <!-- ĐĂNG NHẬP HÀNG LOẠT -->
+  <!-- KHUÔN PROMPT DÙNG CHUNG -->
+  <div id="tpl-modal" class="acc-modal" hidden>
+    <div class="acc-modal-backdrop"></div>
+    <div class="acc-modal-card" style="width:min(860px,96vw)">
+      <div class="form-header">
+        <h4>Khuôn prompt dùng chung</h4>
+        <button type="button" id="tm-close" class="icon-btn-close">✕</button>
+      </div>
+      <p class="acc-modal-note">
+        Mỗi lượt gen sẽ thay <code id="tm-placeholder">PASTE DESIGN PROMPT HERE</code>
+        bằng nội dung prompt thiết kế bạn chọn. Dòng đó bắt buộc phải còn trong khuôn.
+      </p>
+      <div class="form-group">
+        <textarea id="tm-text" rows="20" spellcheck="false"
+                  style="font-family:ui-monospace,Consolas,monospace;font-size:12px"></textarea>
+      </div>
+      <p class="acc-modal-note" id="tm-status" hidden></p>
+      <div class="form-actions">
+        <button type="button" id="tm-reload" class="btn ghost sm">Nạp lại</button>
+        <button type="button" id="tm-cancel" class="btn ghost sm">Đóng</button>
+        <button type="button" id="tm-save" class="btn primary sm">Lưu khuôn</button>
+      </div>
+    </div>
+  </div>
+
   <div id="bulk-modal" class="acc-modal" hidden>
     <div class="acc-modal-backdrop"></div>
     <div class="acc-modal-card" style="width:min(560px,94vw)">

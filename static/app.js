@@ -159,10 +159,18 @@ async function handleLoginFlow(btn) {
   openLoginModal(name, btn);
 }
 
-// ---- Đăng nhập hàng loạt: dán nhiều dòng, tool chạy lần lượt ---------------
+// ---- Đăng nhập hàng loạt: dán nhiều dòng, mỗi dòng một cửa sổ Chrome song song
 const BULK_LABEL = {
   pending: "Chờ", running: "Đang đăng nhập…", done: "Xong",
   failed: "Lỗi", needs_human: "Cần bạn xác minh",
+};
+
+// Chạy song song nhiều cửa sổ -> phải nói rõ CỬA SỔ NÀO đang ở bước nào,
+// không thì người dùng nhìn 10 dòng "Đang đăng nhập…" chẳng biết vào cái nào.
+const BULK_PHASE = {
+  starting: "Đang mở Chrome…", email: "Đang nhập email…",
+  password: "Đang nhập mật khẩu…", "2fa": "Đang nhập mã 2FA…",
+  captcha: "Cần bạn xác minh", done: "Xong",
 };
 
 function renderBulkList(items) {
@@ -178,7 +186,10 @@ function renderBulkList(items) {
     <div class="bulk-row">
       <span class="bulk-email" title="${esc(it.email)}">${esc(it.email)}</span>
       <span class="bulk-prof">${esc(it.profile)}</span>
-      <span class="bulk-badge ${it.status}">${BULK_LABEL[it.status] || it.status}</span>
+      <span class="bulk-badge ${it.needs_human ? "needs_human" : it.status}">${
+        it.needs_human ? "Cần bạn xác minh"
+        : (it.status === "running" && BULK_PHASE[it.phase]) || BULK_LABEL[it.status] || it.status
+      }</span>
     </div>
     ${it.error ? `<div class="quota-reason">${esc(it.error)}</div>` : ""}
   `).join("");
@@ -204,6 +215,73 @@ function closeBulkModal() {
 }
 
 $("#open-bulk-login")?.addEventListener("click", openBulkModal);
+
+// ---- Khuôn prompt dùng chung (data/prompt_template.txt) --------------------
+// Sửa được thẳng trên UI: trước đây phải mở file bằng tay rồi restart server.
+let tplPlaceholder = "PASTE DESIGN PROMPT HERE";
+
+function tplStatus(msg, bad) {
+  const el = $("#tm-status");
+  if (!el) return;
+  el.hidden = !msg;
+  el.textContent = msg || "";
+  el.style.color = bad ? "var(--danger, #e5484d)" : "";
+}
+
+async function loadPromptTemplate() {
+  tplStatus("");
+  try {
+    const d = await (await fetch("/api/prompt-template")).json();
+    tplPlaceholder = d.placeholder || tplPlaceholder;
+    $("#tm-text").value = d.template || "";
+    const ph = $("#tm-placeholder");
+    if (ph) ph.textContent = tplPlaceholder;
+  } catch (e) {
+    tplStatus("Không đọc được khuôn prompt.", true);
+  }
+}
+
+$("#btn-prompt-template")?.addEventListener("click", async () => {
+  const m = $("#tpl-modal");
+  if (!m) return;
+  await loadPromptTemplate();
+  m.hidden = false;
+  $("#tm-text").focus();
+});
+
+const closeTplModal = () => { const m = $("#tpl-modal"); if (m) m.hidden = true; };
+$("#tm-close")?.addEventListener("click", closeTplModal);
+$("#tm-cancel")?.addEventListener("click", closeTplModal);
+$("#tm-reload")?.addEventListener("click", loadPromptTemplate);
+
+$("#tm-save")?.addEventListener("click", async () => {
+  const text = $("#tm-text").value;
+  // Chặn ngay trên UI cho khỏi mất công gửi lên rồi nhận 400: thiếu dòng này thì
+  // prompt thiết kế không có chỗ để ghép vào.
+  if (!text.includes(tplPlaceholder)) {
+    tplStatus(`Khuôn phải chứa dòng "${tplPlaceholder}".`, true);
+    return;
+  }
+  const btn = $("#tm-save");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/prompt-template", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: text }),
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.detail || "lưu thất bại");
+    }
+    showToast("Đã lưu khuôn prompt", "success");
+    closeTplModal();
+  } catch (e) {
+    tplStatus(String(e.message || e), true);
+  } finally {
+    btn.disabled = false;
+  }
+});
 $("#bm-close")?.addEventListener("click", closeBulkModal);
 $("#bm-cancel")?.addEventListener("click", closeBulkModal);
 $("#bulk-modal .acc-modal-backdrop")?.addEventListener("click", closeBulkModal);
