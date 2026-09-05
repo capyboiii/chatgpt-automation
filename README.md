@@ -54,6 +54,14 @@ Khi không còn gì để làm, tool báo luôn thay vì mở Chrome vô ích.
 Khi tải file ZIP về qua nút "Tải về" / "Tải tất cả (ZIP)", file ZIP cũng giải nén ra đúng
 cây thư mục `/designs/<design>/<mockup>/...`.
 
+### Mức độ suy nghĩ
+Trước tin nhắn đầu của mỗi collection, tool đặt mức suy nghĩ theo `run.thinking`
+(mặc định `vừa`). Đọc từ DOM thật: nút hiện mức là `button.__composer-pill`, bấm vào
+mở menu `composer-intelligence-picker-content`, bên trong **không phải danh sách nút mà
+là thanh trượt 4 nấc** (`role="slider"`, `aria-valuemin=0 aria-valuemax=3`) — đổi nấc
+bằng phím mũi tên, tên mức đọc từ chữ trong menu. Đang đúng mức thì không đụng vào.
+Hỏng thì ghi cảnh báo lên UI rồi chạy tiếp, không chặn lượt gen.
+
 ### Tài khoản đứng hình
 Không phải lỗi nào cũng báo ra chữ. Có lúc tab mở chat xong rồi nằm im: khung soạn
 trống, không đính kèm được ảnh, không gửi được gì. Nếu quá `run.stall_timeout`

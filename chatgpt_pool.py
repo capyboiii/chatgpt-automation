@@ -122,6 +122,25 @@ ORDER_JS = """() => {
 }"""
 
 
+# ---- mức độ suy nghĩ (đọc từ DOM thật, 2026-09) ----------------------------
+# Nút hiện mức nằm trong khung soạn: <button class="__composer-pill"
+# aria-haspopup="menu"> với chữ là mức hiện tại ("High" / "Vừa"...). Bấm vào mở
+# menu data-testid="composer-intelligence-picker-content", bên trong KHÔNG phải
+# danh sách nút mà là THANH TRƯỢT 4 nấc:
+#     role="slider" aria-valuemin=0 aria-valuemax=3   ("High" = nấc 2)
+# Đổi nấc bằng phím mũi tên trái/phải; tên mức hiện ra trong chữ của menu.
+PILL_SEL = 'button.__composer-pill[aria-haspopup="menu"]'
+PICKER_SEL = '[data-testid="composer-intelligence-picker-content"]'
+SLIDER_SEL = '[role="slider"]'
+
+THINK_ALIASES = {
+    "vừa": ("medium", "vừa", "standard", "trung bình"),
+    "cao": ("high", "cao"),
+    "nhanh": ("fast", "light", "instant", "nhanh", "thấp"),
+    "tối đa": ("max", "pro", "highest", "tối đa"),
+}
+
+
 # Đếm ảnh đang đính kèm trong khung soạn + còn đang upload không.
 ATTACH_JS = """() => {
     const form = document.querySelector('form') || document.body;
@@ -444,6 +463,8 @@ class ChatGPTPool:
         # Quá ngần này giây mà một collection chưa ra nổi ảnh nào -> coi tài khoản
         # là đứng hình, bỏ sang tài khoản khác thay vì ngồi thử lại đủ 4 vòng.
         self.stall_timeout = float(r.get("stall_timeout", 120))
+        # mức suy nghĩ đặt trước khi gửi: vừa | cao | nhanh | tối đa ("" = không đụng)
+        self.thinking = str(r.get("thinking", "vừa") or "").strip().lower()
         # Thời gian im lặng tối đa khi ChatGPT trả thiếu ảnh: nếu đã có ít nhất 1 ảnh
         # và ChatGPT ngừng tạo quá 10s, lập tức lưu ảnh và gửi yêu cầu gen tiếp.
         self.quiet_limit_got = float(r.get("quiet_limit_seconds", 10))
@@ -631,6 +652,69 @@ class ChatGPTPool:
         # dự phòng: nạp lại trang gốc
         await page.goto(URL, wait_until="domcontentloaded", timeout=self.nav_timeout)
         await self._find(page, SEL_PROMPT, 30_000)
+
+    async def _set_thinking(self, page: Page) -> bool:
+        """Đặt mức suy nghĩ trước khi gửi. Đúng mức rồi thì không đụng vào.
+
+        Hỏng kiểu gì cũng chỉ ghi log rồi chạy tiếp - không được làm chết lượt gen.
+        """
+        want = self.thinking
+        if not want:
+            return True
+        aliases = THINK_ALIASES.get(want, (want,))
+        try:
+            pill = page.locator(PILL_SEL).first
+            await pill.wait_for(state="visible", timeout=8_000)
+            cur = (await pill.inner_text() or "").strip().lower()
+            if any(a in cur for a in aliases):
+                return True                       # đang đúng mức rồi
+
+            await pill.click(timeout=5_000)
+            await page.locator(PICKER_SEL).first.wait_for(state="visible", timeout=5_000)
+            slider = page.locator(SLIDER_SEL).first
+            await slider.focus()
+
+            async def level_now() -> str:
+                txt = await page.locator(PICKER_SEL).first.inner_text()
+                return (txt or "").strip().splitlines()[0].strip().lower()[:20]
+
+            for _ in range(4):                    # về nấc thấp nhất cho chắc mốc
+                await slider.press("ArrowLeft")
+                await page.wait_for_timeout(120)
+
+            # `any(... await ...)` trong generator sẽ tạo async generator và vỡ ->
+            # phải await ra biến trước rồi mới so.
+            hit = False
+            for _ in range(4):                    # rồi bò lên tới đúng mức
+                lvl = await level_now()
+                if any(a in lvl for a in aliases):
+                    hit = True
+                    break
+                await slider.press("ArrowRight")
+                await page.wait_for_timeout(180)
+            if not hit:
+                lvl = await level_now()
+                hit = any(a in lvl for a in aliases)
+
+            await page.keyboard.press("Escape")
+            await page.wait_for_timeout(400)
+            now = (await pill.inner_text() or "").strip()
+            if hit or any(a in now.lower() for a in aliases):
+                log.info("Đã đặt mức suy nghĩ: %s", now)
+                return True
+            msg = f"Không đặt được mức suy nghĩ '{want}' (đang là '{now}')"
+            log.warning(msg)
+            self.warnings.append(msg)
+            return False
+        except Exception as e:  # noqa: BLE001
+            msg = f"Không đặt được mức suy nghĩ ({str(e)[:80]})"
+            log.warning(msg)
+            self.warnings.append(msg)
+            try:
+                await page.keyboard.press("Escape")
+            except Exception:  # noqa: BLE001
+                pass
+            return False
 
     async def _count_attached(self, page: Page) -> int:
         """Số ảnh đang đính kèm trong khung soạn."""
@@ -1091,6 +1175,9 @@ class ChatGPTPool:
             col["status"] = "failed"
             col["error"] = f"Không mở được chat: {e}"
             return False
+
+        # đặt mức suy nghĩ TRƯỚC tin nhắn đầu tiên của collection này
+        await self._set_thinking(page)
 
         seen = set(await self._collect(page))
         chunks = [pending_jobs[i:i + self.batch_size]
