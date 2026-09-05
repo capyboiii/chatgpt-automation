@@ -8,7 +8,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=46">
+  <link rel="stylesheet" href="style.css?v=51">
 </head>
 <body>
   <!-- Ambient backdrop glows -->
@@ -33,10 +33,12 @@
       </div>
 
       <div class="topbar-right">
-        <div id="pool-stat-pill" class="pool-stat-pill">
+        <!-- Tài khoản là thứ cài một lần rồi thôi: cho vào ngăn kéo, khỏi
+             chiếm nửa màn hình đầu của việc chính. -->
+        <button type="button" id="open-accounts" class="pool-stat-pill" title="Xem và quản lý tài khoản ChatGPT">
           <span class="pulse-indicator"></span>
-          <span id="pool-info">0 tài khoản · 0 tab</span>
-        </div>
+          <span id="pool-info">0 tài khoản</span>
+        </button>
 
         <button id="theme-toggle" class="icon-btn" title="Đổi giao diện Sáng / Tối" aria-label="Toggle theme">
           <svg class="theme-icon sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -61,39 +63,6 @@
   <!-- Main Container -->
   <main class="app-container">
 
-    <!-- ACCOUNTS SECTION -->
-    <section class="panel panel-accounts" id="sec-profiles">
-      <div class="panel-head">
-        <div class="panel-title-group">
-          <div class="section-icon-box emerald">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-              <circle cx="9" cy="7" r="4"></circle>
-              <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
-              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-            </svg>
-          </div>
-          <div class="section-title-wrap">
-            <h2>Tài Khoản ChatGPT</h2>
-          </div>
-          <span id="total-tabs" class="stat-pill-badge">
-            <span class="stat-dot"></span>
-            <span class="stat-val">0 tài khoản</span>
-          </span>
-        </div>
-
-        <button type="button" id="open-bulk-login" class="btn primary-subtle sm"
-                title="Dán nhiều tài khoản, tool mở song song mỗi tài khoản một cửa sổ Chrome">
-          ⚡ Đăng nhập hàng loạt
-        </button>
-
-      </div>
-
-      <div id="profiles-collapsible" class="profiles-collapsible">
-        <div id="profiles-list" class="profiles-grid"></div>
-      </div>
-    </section>
-
     <!-- 2 MAIN WORKSPACE COLUMNS -->
     <div class="main-columns">
 
@@ -101,13 +70,6 @@
       <section class="panel panel-templates" id="sec-templates">
         <div class="panel-head">
           <div class="panel-title-group">
-            <div class="section-icon-box cyan">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"></rect>
-                <circle cx="9" cy="9" r="2"></circle>
-                <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"></path>
-              </svg>
-            </div>
             <div class="section-title-wrap">
               <h2>Mẫu Template</h2>
             </div>
@@ -118,14 +80,17 @@
           </div>
 
           <div class="panel-head-actions">
-            <button type="button" class="btn action-btn sm" onclick="document.getElementById('file-input').click();">
+            <button type="button" class="btn primary-subtle sm" onclick="document.getElementById('file-input').click();">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
               Tải ảnh
             </button>
-            <button type="button" id="pick-folder" class="btn action-btn sm" title="Tải toàn bộ thư mục">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
-              Thư mục
-            </button>
+            <details class="menu">
+              <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
+              <div class="menu-pop">
+                <button type="button" id="pick-folder" class="menu-item">Tải cả thư mục</button>
+                <button id="clear-templates" class="menu-item danger">Xoá hết ảnh</button>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -137,7 +102,7 @@
           <div class="dropzone-icon-ring">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
           </div>
-          <span class="dropzone-label">Kéo thả ảnh hoặc cả thư mục vào đây (hoặc bấm <b>Tải ảnh</b> / <b>Thư mục</b>)</span>
+          <span class="dropzone-label">Kéo thả ảnh hoặc cả thư mục vào đây, hoặc bấm <b>+ Tải ảnh</b></span>
         </label>
 
         <!-- Gallery Toolbar -->
@@ -153,10 +118,6 @@
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
               <input type="text" id="tpl-search" placeholder="Tìm ảnh...">
             </div>
-            <button id="clear-templates" class="btn danger sm" title="Xoá tất cả ảnh">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
-              Xoá hết
-            </button>
           </div>
         </div>
 
@@ -173,11 +134,6 @@
       <section class="panel panel-prompts" id="sec-prompts">
         <div class="panel-head">
           <div class="panel-title-group">
-            <div class="section-icon-box purple">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"></path>
-              </svg>
-            </div>
             <div class="section-title-wrap">
               <h2>Prompt Thiết Kế</h2>
             </div>
@@ -188,26 +144,20 @@
           </div>
 
           <div class="panel-head-actions">
-            <button type="button" id="btn-select-all-prompts" class="btn action-btn sm" title="Chọn tất cả để tạo Collections hàng loạt">
-              Chọn tất cả
-            </button>
-            <button type="button" id="btn-prompt-template" class="btn action-btn sm"
-                    title="Sửa khuôn prompt dùng chung cho mọi lượt gen (data/prompt_template.txt)">
-              Khuôn prompt
-            </button>
             <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
-            <button type="button" id="btn-import-csv" class="btn action-btn sm"
-                    title="Nhập prompt hàng loạt từ CSV (cột PROMPT, TOPIC, Style)">
-              Nhập CSV
-            </button>
-            <button type="button" id="clear-prompts" class="btn danger sm" title="Xoá tất cả prompt">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
-              Xoá hết
-            </button>
             <button id="new-prompt" class="btn primary-subtle sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
               Tạo Prompt
             </button>
+            <details class="menu">
+              <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
+              <div class="menu-pop">
+                <button type="button" id="btn-select-all-prompts" class="menu-item">Chọn tất cả prompt</button>
+                <button type="button" id="btn-prompt-template" class="menu-item">Sửa khuôn prompt chung</button>
+                <button type="button" id="btn-import-csv" class="menu-item">Nhập từ CSV</button>
+                <button type="button" id="clear-prompts" class="menu-item danger">Xoá hết prompt</button>
+              </div>
+            </details>
           </div>
         </div>
 
@@ -242,9 +192,6 @@
     <section class="panel panel-results" id="results-panel" hidden>
       <div class="panel-head">
         <div class="panel-title-group">
-          <div class="section-icon-box emerald">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-          </div>
           <div class="section-title-wrap">
             <h2>Kết Quả Mockup</h2>
           </div>
@@ -255,48 +202,46 @@
         </div>
 
         <div class="results-actions">
-          <a id="btn-download-all" href="/api/jobs/zip" class="btn primary sm">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Tải ZIP trọn bộ
-          </a>
           <button type="button" id="btn-stop-results" class="btn danger sm" hidden title="Dừng khẩn cấp toàn bộ tác vụ đang chạy">
             🛑 Dừng khẩn cấp
           </button>
-          <button id="btn-clear-jobs" class="btn ghost sm">Xoá</button>
+          <a id="btn-download-all" href="/api/jobs/zip" class="btn primary-subtle sm">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+            Tải ZIP
+          </a>
+          <details class="menu">
+            <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
+            <div class="menu-pop">
+              <button id="btn-clear-jobs" class="menu-item danger">Xoá kết quả</button>
+            </div>
+          </details>
         </div>
       </div>
 
-      <!-- Batch Progress & Resumption Card -->
-      <div id="batch-progress-card" class="batch-progress-card" hidden>
-        <div class="batch-prog-header">
-          <div class="batch-prog-title-group">
-            <span class="batch-badge" id="batch-badge">0 / 0 Bộ</span>
-            <span class="batch-status-text" id="batch-status-text">Đang giám sát tiến độ...</span>
-          </div>
+      <!-- MỘT dải trạng thái duy nhất: tiến độ + thanh chạy + đội tài khoản.
+           Trước đây là 3 khối rời chồng lên nhau, nói đi nói lại cùng một con số. -->
+      <div id="batch-progress-card" class="run-strip" hidden>
+        <div class="run-strip-line">
+          <span class="batch-badge" id="batch-badge">0 / 0 bộ</span>
+          <span class="batch-status-text" id="batch-status-text">Đang giám sát tiến độ…</span>
           <div class="batch-prog-actions" id="batch-prog-actions">
-            <button type="button" id="btn-resume-batch" class="btn primary sm glow-btn" hidden title="Chạy tiếp các bộ chưa xong sau khi hết token hoặc dừng">
-              ▶ Chạy tiếp các bộ còn lại
+            <button type="button" id="btn-resume-batch" class="btn primary sm" hidden title="Chạy tiếp các bộ chưa xong sau khi hết token hoặc dừng">
+              ▶ Chạy tiếp
             </button>
           </div>
         </div>
-        <div class="batch-subtrack-bar">
-          <div class="batch-subtrack-fill" id="batch-subtrack-fill" style="width: 0%;"></div>
-        </div>
-      </div>
 
-      <div class="progress-track-wrapper">
         <div class="progress-track" id="jobs-progress-bar">
           <div class="progress-fill" id="jobs-progress-fill" style="width: 0%;"></div>
         </div>
-      </div>
 
-      <!-- Account Fleet Live Monitor -->
-      <div id="fleet-status-bar" class="fleet-status-bar" hidden>
-        <div class="fleet-header">
-          <span class="pulse-indicator"></span>
-          <span class="fleet-title">Tiến Độ Đội Tài Khoản ChatGPT (Worker Fleet):</span>
+        <div class="batch-subtrack-bar" hidden>
+          <div class="batch-subtrack-fill" id="batch-subtrack-fill" style="width: 0%;"></div>
         </div>
-        <div id="fleet-chips" class="fleet-chips"></div>
+
+        <div id="fleet-status-bar" class="fleet-status-bar" hidden>
+          <div id="fleet-chips" class="fleet-chips"></div>
+        </div>
       </div>
 
       <div id="quota-banner" class="quota-banner" hidden></div>
@@ -307,6 +252,27 @@
     </section>
 
   </main>
+
+  <!-- NGĂN KÉO TÀI KHOẢN -->
+  <div class="drawer-backdrop" id="accounts-drawer-backdrop" hidden></div>
+  <aside class="side-drawer" id="accounts-drawer" hidden>
+    <div class="side-drawer-head">
+      <h3>Tài khoản ChatGPT</h3>
+      <span id="total-tabs" class="stat-pill-badge"><span class="stat-val">0 tài khoản</span></span>
+      <div class="side-drawer-head-actions">
+        <button type="button" id="open-bulk-login" class="btn primary-subtle sm"
+                title="Dán nhiều tài khoản, tool mở song song mỗi tài khoản một cửa sổ Chrome">
+          ⚡ Đăng nhập hàng loạt
+        </button>
+        <button type="button" class="icon-btn-close" id="btn-close-accounts">✕</button>
+      </div>
+    </div>
+    <div class="side-drawer-body">
+      <div id="profiles-collapsible" class="profiles-collapsible">
+        <div id="profiles-list" class="profiles-grid"></div>
+      </div>
+    </div>
+  </aside>
 
   <!-- QUEUE DRAWER (BẢNG HÀNG ĐỢI COLLECTIONS) -->
   <div class="queue-drawer-backdrop" id="queue-drawer-backdrop" hidden></div>
@@ -340,10 +306,10 @@
   <!-- FLOATING RUN BAR -->
   <div class="runbar" id="main-runbar">
     <div class="runbar-text">
-      <div class="runbar-status-pill" id="runbar-status-pill">
+      <span class="runbar-status-pill" id="runbar-status-pill">
         <span class="status-indicator-dot" id="runbar-status-dot"></span>
         <span id="runbar-status-state">Sẵn sàng</span>
-      </div>
+      </span>
       <span class="runbar-main-msg" id="runbar-main-msg">Chọn template và prompt để bắt đầu</span>
     </div>
 

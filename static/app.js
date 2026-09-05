@@ -72,10 +72,14 @@ async function loadProfiles() {
     const res = await fetch("/api/profiles");
     const d = await res.json();
     state.profiles = d.profiles || [];
-    $("#pool-info").textContent = `${state.profiles.length} tài khoản`;
+    // Đếm riêng số tài khoản CHẮC CHẮN đăng nhập được, để nhìn chip trên topbar
+    // là biết đội hình thực sự dùng được bao nhiêu.
+    const ok = state.profiles.filter(p => p.logged_in === true).length;
+    const total = state.profiles.length;
+    $("#pool-info").textContent = ok && ok < total
+      ? `${ok}/${total} tài khoản` : `${total} tài khoản`;
     const tabEl = $("#total-tabs .stat-val") || $("#total-tabs");
-    if (tabEl) tabEl.textContent = `${state.profiles.length} tài khoản`;
-
+    if (tabEl) tabEl.textContent = `${total} tài khoản`;
 
     renderProfiles();
   } catch (err) {
@@ -84,39 +88,78 @@ async function loadProfiles() {
 }
 
 // Toggle add profile form
-function renderProfiles() {
+// Chữ ký dữ liệu của lần vẽ trước. Poll 2s/lần mà lần nào cũng dựng lại innerHTML
+// thì đúng lúc người dùng đang rê chuột/bấm là thẻ bị thay mới -> nháy, mất hover,
+// hụt cả cú click. Dữ liệu không đổi thì không vẽ lại.
+let profilesSig = "";
+
+function profileState(p) {
+  if (p.login_open) return { key: "logging", pill: "warn", text: "Đang mở Chrome…" };
+  if (p.logged_in === true) return { key: "on", pill: "online", text: "Đã đăng nhập" };
+  if (p.logged_in === false) return { key: "off", pill: "danger", text: "Đăng nhập lỗi" };
+  return { key: "unknown", pill: "", text: p.exists ? "Chưa kiểm tra" : "Chưa kết nối" };
+}
+
+function renderProfiles(force) {
   const list = $("#profiles-list");
   if (!list) return;
 
   if (state.profiles.length === 0) {
-    list.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1; padding:14px; margin:0;">Chưa có tài khoản. Bấm "Thêm tài khoản" để kết nối.</div>`;
+    profilesSig = "";
+    list.innerHTML = `<div class="empty-state" style="grid-column: 1 / -1; padding:14px; margin:0;">Chưa có tài khoản. Bấm "Đăng nhập hàng loạt" để kết nối.</div>`;
     return;
   }
 
-  list.innerHTML = state.profiles.map(p => {
-    const isOnline = p.exists && !p.login_open;
-    const isLogging = p.login_open;
-    const statusDotClass = isLogging ? "active-logging" : (isOnline ? "online" : "");
+  const sig = JSON.stringify(state.profiles.map(p =>
+    [p.name, p.email, p.exists, p.login_open, p.logged_in, p.login_error]));
+  if (!force && sig === profilesSig) return;
+  profilesSig = sig;
 
+  list.innerHTML = state.profiles.map(p => {
+    const st = profileState(p);
+    const err = p.logged_in === false && p.login_error ? p.login_error : "";
     return `
-      <div class="pcard" data-name="${esc(p.name)}">
+      <div class="pcard state-${st.key}" data-name="${esc(p.name)}">
         <div class="pcard-top">
-          <span class="status-dot ${statusDotClass}"></span>
+          <span class="status-dot ${st.key === "logging" ? "active-logging" : (st.key === "on" ? "online" : "")}"></span>
           <span class="pcard-name">${esc(p.name)}</span>
-          <span class="pcard-status-pill ${isLogging ? "warn" : (isOnline ? "online" : "")}">
-            ${isLogging ? "Đang mở" : (isOnline ? "Sẵn sàng" : "Chưa kết nối")}
-          </span>
+          <span class="pcard-status-pill ${st.pill}">${st.text}</span>
+          <button class="icon-action" data-checkp="${esc(p.name)}" title="Mở Chrome kiểm tra xem tài khoản này còn đăng nhập không">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+          </button>
           <button class="icon-action danger" data-delp="${esc(p.name)}" title="Xoá tài khoản">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
           </button>
         </div>
         <div class="pcard-email" title="${esc(p.email || "")}">${esc(p.email || "—")}</div>
-        <button class="btn ${isLogging ? "primary confirm" : (isOnline ? "action-btn" : "primary")} sm btn-login-step" data-login="${esc(p.name)}" data-stage="${isLogging ? "confirm" : "idle"}">
-          ${isLogging ? "Đã xong" : (isOnline ? "Đăng nhập lại" : "Đăng nhập")}
+        ${err ? `<div class="pcard-err" title="${esc(err)}">${esc(err)}</div>` : ""}
+        <button class="btn ${st.key === "logging" ? "primary confirm" : (st.key === "on" ? "action-btn" : "primary")} sm btn-login-step" data-login="${esc(p.name)}" data-stage="${st.key === "logging" ? "confirm" : "idle"}">
+          ${st.key === "logging" ? "Đã xong" : (st.key === "on" ? "Đăng nhập lại" : "Đăng nhập")}
         </button>
       </div>
     `;
   }).join("");
+
+  list.querySelectorAll("[data-checkp]").forEach(b => {
+    b.addEventListener("click", async () => {
+      const name = b.dataset.checkp;
+      b.classList.add("spinning");
+      b.disabled = true;
+      try {
+        const r = await (await fetch(`/api/profiles/${name}/check`,
+                                     { method: "POST" })).json();
+        showToast(r.logged_in ? `"${name}" vẫn đang đăng nhập.`
+                              : `"${name}" CHƯA đăng nhập — cần đăng nhập lại.`,
+                  r.logged_in ? "success" : "error");
+      } catch (e) {
+        showToast(`Không kiểm tra được "${name}": ${e.message}`, "error");
+      } finally {
+        b.classList.remove("spinning");
+        b.disabled = false;
+        loadProfiles();
+      }
+    });
+  });
 
   list.querySelectorAll("[data-delp]").forEach(b => {
     b.addEventListener("click", async () => {
@@ -216,6 +259,39 @@ function closeBulkModal() {
 
 $("#open-bulk-login")?.addEventListener("click", openBulkModal);
 
+// ---- Ngăn kéo Tài khoản ----------------------------------------------------
+// Tài khoản là thứ cài một lần rồi thôi. Để nó nằm giữa màn hình chính thì mỗi
+// lần vào tool đều phải cuộn qua nó mới tới việc cần làm.
+function toggleAccountsDrawer(show) {
+  const d = $("#accounts-drawer");
+  const b = $("#accounts-drawer-backdrop");
+  if (!d || !b) return;
+  const open = show === undefined ? d.hidden : show;
+  d.hidden = !open;
+  b.hidden = !open;
+}
+
+$("#open-accounts")?.addEventListener("click", () => toggleAccountsDrawer());
+$("#btn-close-accounts")?.addEventListener("click", () => toggleAccountsDrawer(false));
+$("#accounts-drawer-backdrop")?.addEventListener("click", () => toggleAccountsDrawer(false));
+
+// ---- Menu "⋯" --------------------------------------------------------------
+// <details> lo phần đóng/mở, ở đây chỉ cần: bấm ra ngoài thì đóng, và bấm một
+// mục xong cũng đóng (không thì menu che mất kết quả của chính thao tác đó).
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.menu[open]").forEach((d) => {
+    if (!d.contains(e.target)) d.open = false;
+  });
+  const item = e.target.closest?.(".menu-item");
+  if (item) item.closest("details.menu")?.removeAttribute("open");
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  document.querySelectorAll("details.menu[open]").forEach((d) => (d.open = false));
+  if (!$("#accounts-drawer")?.hidden) toggleAccountsDrawer(false);
+});
+
 // ---- Khuôn prompt dùng chung (data/prompt_template.txt) --------------------
 // Sửa được thẳng trên UI: trước đây phải mở file bằng tay rồi restart server.
 let tplPlaceholder = "PASTE DESIGN PROMPT HERE";
@@ -225,7 +301,7 @@ function tplStatus(msg, bad) {
   if (!el) return;
   el.hidden = !msg;
   el.textContent = msg || "";
-  el.style.color = bad ? "var(--danger, #e5484d)" : "";
+  el.style.color = bad ? "var(--err)" : "";
 }
 
 async function loadPromptTemplate() {
@@ -322,14 +398,29 @@ $("#bm-go")?.addEventListener("click", async () => {
     try {
       const d = await (await fetch("/api/profiles/bulk-login/status")).json();
       renderBulkList(d.items);
+      // Có tài khoản vừa xong -> nạp lại danh sách NGAY, khỏi đợi hết cả lượt mới
+      // biết cái nào ăn cái nào trượt.
+      const sig = (d.items || []).map(x => x.status).join(",");
+      if (sig !== state.bulkSig) {
+        state.bulkSig = sig;
+        loadProfiles();
+      }
       if (!d.active) {
         clearInterval(state.bulkPoll);
         state.bulkPoll = null;
-        const ok = (d.items || []).filter(x => x.status === "done").length;
-        showToast(`Đăng nhập xong ${ok}/${(d.items || []).length} tài khoản`,
-                  ok ? "success" : "error");
+        const items = d.items || [];
+        const ok = items.filter(x => x.status === "done").length;
+        const bad = items.filter(x => x.status !== "done")
+                         .map(x => x.profile).join(", ");
+        showToast(ok === items.length
+                    ? `Đăng nhập xong cả ${ok} tài khoản`
+                    : `Đăng nhập xong ${ok}/${items.length} — chưa được: ${bad}`,
+                  ok === items.length ? "success" : "error");
         $("#bm-go").disabled = false;
+        state.bulkSig = "";
         loadProfiles();
+        // Mở ngăn kéo tài khoản để thấy ngay cái nào xanh cái nào đỏ.
+        toggleAccountsDrawer(true);
       }
     } catch (e) { /* vòng sau hỏi lại */ }
   }, 2000);
@@ -823,10 +914,10 @@ function renderPrompts() {
         <div class="prompt-content">
           <div class="prompt-title">${esc(p.name)}</div>
           <div class="prompt-snippet">${esc(p.text)}</div>
+          ${p.text.length > 120 ? `
           <div class="prompt-meta">
-            ${p.design ? `${esc(p.topic || p.name)} · ${esc(p.design)} · ` : ""}${p.text.length} ký tự
-            ${p.text.length > 120 ? `<button type="button" class="prompt-more" data-more="${p.id}">Xem thêm</button>` : ""}
-          </div>
+            <button type="button" class="prompt-more" data-more="${p.id}">Xem thêm</button>
+          </div>` : ""}
         </div>
         <div class="prompt-actions">
           <button class="icon-action" data-edit="${p.id}" title="Sửa">
@@ -1553,12 +1644,22 @@ $("#acc-modal-go")?.addEventListener("click", async () => {
 function updateBatchMonitor(isRunning) {
   const card = $("#batch-progress-card");
   if (!card) return;
+  const badgeEl = $("#batch-badge");
+  const textEl = $("#batch-status-text");
   const cols = state.collections || [];
   if (cols.length === 0) {
-    card.hidden = true;
+    // Chế độ chạy đơn lẻ (không gom bộ): vẫn giữ dải lại để còn thấy thanh tiến
+    // độ, chỉ giấu phần đếm "bộ" đi cho khỏi hiện "0/0 bộ" vô nghĩa.
+    card.hidden = (state.jobs || []).length === 0;
+    if (badgeEl) badgeEl.hidden = true;
+    if (textEl) textEl.hidden = true;
+    const rb = $("#btn-resume-batch");
+    if (rb) rb.hidden = true;
     return;
   }
   card.hidden = false;
+  if (badgeEl) badgeEl.hidden = false;
+  if (textEl) textEl.hidden = false;
 
   const total = cols.length;
   const done = cols.filter(c => c.status === "done" || (c.done_count && c.done_count >= c.total_count)).length;
@@ -1570,32 +1671,31 @@ function updateBatchMonitor(isRunning) {
   const fill = $("#batch-subtrack-fill");
   const resumeBtn = $("#btn-resume-batch");
 
-  if (badge) badge.textContent = `${done} / ${total} Bộ`;
+  if (badge) badge.textContent = `${done}/${total} bộ`;
   if (fill) fill.style.width = `${pct}%`;
 
+  // Câu chữ ngắn gọn: con số đã nằm ở badge và thanh tiến độ rồi, ở đây chỉ cần
+  // nói TÌNH TRẠNG và việc còn lại.
+  let msg;
   if (isRunning) {
-    if (text) text.textContent = `⚡ Đang gen: Hoàn thành ${done}/${total} bộ (${pct}%). Còn ${remaining} bộ...`;
-    if (resumeBtn) resumeBtn.hidden = true;
+    msg = remaining ? `Đang chạy · còn ${remaining} bộ` : "Đang hoàn tất…";
   } else if (state.isStopped) {
-    if (text) text.textContent = `🛑 Đã dừng khẩn cấp: ${done}/${total} bộ hoàn thành. Còn ${remaining} bộ chưa xong.`;
-    if (resumeBtn) {
-      resumeBtn.hidden = (remaining === 0);
-      resumeBtn.textContent = `▶ Chạy tiếp ${remaining} bộ còn lại`;
-    }
+    msg = `Đã dừng · ${remaining} bộ chưa xong`;
   } else if (remaining === 0) {
-    if (text) text.textContent = `🎉 Hoàn thành xuất sắc 100% (${total}/${total} bộ)!`;
-    if (resumeBtn) resumeBtn.hidden = true;
+    msg = "Xong tất cả";
+  } else if (state.exhaustedProfiles && state.exhaustedProfiles.length) {
+    msg = `Hết lượt tài khoản · ${remaining} bộ chưa xong`;
   } else {
-    const hasExhausted = (state.exhaustedProfiles && state.exhaustedProfiles.length > 0);
-    if (hasExhausted) {
-      if (text) text.textContent = `⚠️ Hết lượt/token tài khoản! Đã tạo ${done}/${total} bộ. Còn ${remaining} bộ cần chạy tiếp.`;
-    } else {
-      if (text) text.textContent = `Tiến độ đợt: Đã tạo ${done}/${total} bộ. Còn ${remaining} bộ chưa xong (có thể chạy tiếp).`;
-    }
-    if (resumeBtn) {
-      resumeBtn.hidden = false;
-      resumeBtn.textContent = `▶ Chạy tiếp ${remaining} bộ còn lại`;
-    }
+    msg = `Tạm dừng · ${remaining} bộ chưa xong`;
+  }
+  if (text) text.textContent = msg;
+
+  card.classList.toggle("is-running", !!isRunning);
+  card.classList.toggle("is-done", !isRunning && remaining === 0);
+
+  if (resumeBtn) {
+    resumeBtn.hidden = isRunning || remaining === 0;
+    resumeBtn.textContent = `▶ Chạy tiếp ${remaining} bộ`;
   }
 }
 
@@ -1723,25 +1823,58 @@ function renderFleetBar(fleet, exhausted) {
     const isBusy = info.status === "busy";
     const statusClass = isExh ? "exhausted" : (isBusy ? "busy" : "");
 
-    let statusText = "Rảnh rỗi";
+    let statusText = "rảnh";
     if (isExh) {
-      statusText = "⛔ Hết lượt tạo ảnh";
+      statusText = "hết lượt";
     } else if (isBusy) {
-      statusText = `⚡ Đang gen: <b>${esc(info.collection_name || info.prompt_name || "Collection")}</b>`;
+      statusText = `<b>${esc(info.collection_name || info.prompt_name || "Collection")}</b>`;
     } else if (info.status === "starting") {
-      statusText = "Đang mở Chrome...";
+      statusText = "đang mở Chrome…";
     } else if (info.status === "error") {
-      statusText = `Lỗi: ${esc(info.error || "")}`;
+      statusText = `lỗi: ${esc(info.error || "")}`;
     }
 
     return `
       <div class="fleet-chip ${statusClass}">
         <span class="status-dot ${isExh ? "exhausted" : (isBusy ? "online" : "")}"></span>
-        <span class="fleet-chip-name">${esc(p)}:</span>
+        <span class="fleet-chip-name">${esc(p)}</span>
         <span class="fleet-chip-status">${statusText}</span>
       </div>
     `;
   }).join("");
+}
+
+// Một thẻ kết quả. Trước đây đoạn HTML này bị chép hai bản (chế độ Collections và
+// chế độ đơn lẻ) nên sửa giao diện phải sửa hai chỗ, và hai chỗ đã lệch nhau.
+function jobCardHTML(j) {
+  const isDone = j.status === "done" && j.result_url;
+  const isRunning = j.status === "running";
+  const isFailed = j.status === "failed";
+  const cls = isDone ? "done" : (isRunning ? "running" : (isFailed ? "failed" : "pending"));
+
+  const body = isDone
+    ? `<img class="job-mockup-img" src="${j.result_url}" alt="${esc(j.template_name)}"
+            loading="lazy"
+            onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">`
+    : `<div class="job-slot-empty">
+         ${isRunning ? `<span class="spin-ring"></span>`
+           : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">✕</span>` : "")}
+       </div>`;
+
+  return `
+    <div class="job-card ${cls}" ${isFailed && j.error ? `title="${esc(j.error)}"` : ""}>
+      <div class="job-preview-wrap">
+        ${body}
+        ${isDone ? `
+          <a href="${j.result_url}" download class="job-dl" title="Tải ảnh này">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          </a>` : ""}
+      </div>
+      <div class="job-footer">
+        <span class="job-filename" title="${esc(j.template_name)}">${esc(j.template_name)}</span>
+      </div>
+    </div>
+  `;
 }
 
 function renderCollections(cols) {
@@ -1760,7 +1893,7 @@ function renderCollections(cols) {
   });
 
   if (stat) {
-    stat.textContent = `${doneJobs} / ${totalJobs} hoàn thành (${cols.length} Collections)`;
+    stat.textContent = `${doneJobs}/${totalJobs} ảnh · ${cols.length} bộ`;
   }
   if (fill) {
     const pct = totalJobs > 0 ? Math.round((doneJobs / totalJobs) * 100) : 0;
@@ -1780,59 +1913,20 @@ function renderCollections(cols) {
       <div class="collection-card ${statusBadgeClass}">
         <div class="collection-header">
           <div class="collection-title-group">
-            <span class="collection-folder-name">📁 ${esc(c.name)}</span>
-            <span class="collection-prompt-tag">💡 ${esc(c.prompt_name)}</span>
-            ${c.worker ? `<span class="collection-worker-tag">👤 ${esc(c.worker)}</span>` : ""}
+            <span class="collection-folder-name">${esc(c.name)}</span>
           </div>
           <div class="collection-actions">
             <span class="collection-stat-badge ${statusBadgeClass}">
-              ${c.done_count} / ${c.total_count} ảnh (${statusText})
+              ${c.done_count}/${c.total_count} · ${statusText}
             </span>
-            <a href="/api/jobs/zip?cid=${c.id}" class="btn action-btn sm" title="Tải trọn bộ folder ${esc(c.name)}">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              Tải bộ này (.zip)
+            <a href="/api/jobs/zip?cid=${c.id}" class="icon-action" title="Tải trọn bộ &quot;${esc(c.name)}&quot; (.zip)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </a>
           </div>
         </div>
 
         <div class="results-grid">
-          ${(c.jobs || []).map(j => {
-            const isDone = j.status === "done" && j.result_url;
-            const isRunning = j.status === "running";
-            const isFailed = j.status === "failed";
-            return `
-              <div class="job-card">
-                <div class="job-preview-wrap">
-                  ${isDone ? `
-                    <img class="job-mockup-img" src="${j.result_url}" alt="Mockup" onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">
-                  ` : `
-                    <div class="job-slot-empty">
-                      ${isRunning ? `<span class="spin-ring"></span><span class="job-empty-lbl">Đang tạo...</span>`
-                        : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">❌ Lỗi</span>` : `<span class="job-empty-lbl">Chờ...</span>`)}
-                    </div>
-                  `}
-                </div>
-
-                <div class="job-footer">
-                  <div class="job-info-text">
-                    <span class="job-filename" title="${esc(j.template_name)}">${esc(j.template_name)}</span>
-                    ${j.worker ? `<span class="job-worker" title="Tài khoản/tab đang xử lý">${esc(j.worker)}</span>` : ""}
-                  </div>
-
-                  <div style="display:flex; align-items:center; gap:6px;">
-                    <span class="job-status-badge ${j.status}">
-                      ${isRunning ? `Đang tạo` : (isDone ? `Xong` : (isFailed ? `Lỗi` : `Chờ`))}
-                    </span>
-                    ${isDone ? `
-                      <a href="${j.result_url}" download class="icon-action" title="Tải về">
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                      </a>
-                    ` : ""}
-                  </div>
-                </div>
-              </div>
-            `;
-          }).join("")}
+          ${(c.jobs || []).map(jobCardHTML).join("")}
         </div>
       </div>
     `;
@@ -1899,7 +1993,7 @@ function renderResults(jobs) {
   const total = jobs.length;
 
   if (stat) {
-    stat.textContent = `${doneCount} / ${total} hoàn thành`
+    stat.textContent = `${doneCount}/${total} ảnh`
       + (state.runProfile ? ` · ${state.runProfile}` : "");
   }
 
@@ -1910,44 +2004,7 @@ function renderResults(jobs) {
 
   if (!grid) return;
 
-  grid.innerHTML = jobs.map(j => {
-    const isDone = j.status === "done" && j.result_url;
-    const isRunning = j.status === "running";
-    const isFailed = j.status === "failed";
-
-    return `
-      <div class="job-card">
-        <div class="job-preview-wrap">
-          ${isDone ? `
-            <img class="job-mockup-img" src="${j.result_url}" alt="Mockup" onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">
-          ` : `
-            <div class="job-slot-empty">
-              ${isRunning ? `<span class="spin-ring"></span><span class="job-empty-lbl">Đang tạo...</span>`
-                : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">❌ Lỗi</span>` : `<span class="job-empty-lbl">Chờ...</span>`)}
-            </div>
-          `}
-        </div>
-
-        <div class="job-footer">
-          <div class="job-info-text">
-            <span class="job-filename" title="${esc(j.template_name)}">${esc(j.template_name)}</span>
-            ${j.worker ? `<span class="job-worker" title="Tài khoản/tab đang xử lý">${esc(j.worker)}</span>` : ""}
-          </div>
-
-          <div style="display:flex; align-items:center; gap:6px;">
-            <span class="job-status-badge ${j.status}">
-              ${isRunning ? `Đang tạo` : (isDone ? `Xong` : (isFailed ? `Lỗi` : `Chờ`))}
-            </span>
-            ${isDone ? `
-              <a href="${j.result_url}" download class="icon-action" title="Tải về">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              </a>
-            ` : ""}
-          </div>
-        </div>
-      </div>
-    `;
-  }).join("");
+  grid.innerHTML = jobs.map(jobCardHTML).join("");
 }
 
 $("#btn-clear-jobs")?.addEventListener("click", async () => {

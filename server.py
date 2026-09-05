@@ -1043,6 +1043,34 @@ def _save_profiles(profs: list[dict]) -> None:
 LOGIN: dict[str, dict] = {}        # name -> {stop, thread, logged_in, error, phase}
 LAST_LOGIN: dict[str, dict] = {}   # name -> kết quả lần đăng nhập gần nhất
 
+# Kết quả đăng nhập gần nhất của TỪNG profile, có ghi ra đĩa để còn nguyên sau khi
+# restart server. Trước đây UI đọc mỗi `exists` (thư mục profile có tồn tại không)
+# rồi ghi "Sẵn sàng" - thư mục thì tạo ra ngay lúc mở Chrome, nên đăng nhập hỏng
+# vẫn hiện "Sẵn sàng" y hệt lúc thành công, người dùng không có cách nào biết.
+PROFILE_STATE_FILE = ROOT / "data" / "profile_login.json"
+
+
+def _load_login_state() -> dict:
+    try:
+        return json.loads(PROFILE_STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+LOGIN_STATE: dict[str, dict] = _load_login_state()
+
+
+def _mark_login(name: str, ok: bool | None, error: str | None = None) -> None:
+    """Ghi nhận kết quả đăng nhập của một profile (không bao giờ chứa mật khẩu)."""
+    LOGIN_STATE[name] = {"logged_in": ok, "error": (error or None),
+                         "at": time.time()}
+    try:
+        PROFILE_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        PROFILE_STATE_FILE.write_text(
+            json.dumps(LOGIN_STATE, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        log.warning("Không ghi được trạng thái đăng nhập: %s", e)
+
 
 # Đo trên chính profile của tool (2026-09), thử đủ mọi tín hiệu:
 #
@@ -1135,6 +1163,7 @@ def _login_worker(name: str, udir: Path, box: dict):
                     log.info("[%s] Đăng nhập tự động thành công.", name)
                     LAST_LOGIN[name] = {"logged_in": True, "error": None,
                                         "needs_human": False, "phase": "done"}
+                    _mark_login(name, True)
                     ctx.close()
                     return                     # xong thì tự đóng, khỏi bấm "Xong"
                 # Đánh dấu để UI biết mà hiện lỗi + nút "Tôi đã đăng nhập xong".
@@ -1156,6 +1185,8 @@ def _login_worker(name: str, udir: Path, box: dict):
                             "error": box.get("error"),
                             "needs_human": box.get("needs_human", False),
                             "phase": box.get("phase", "done")}
+        if box.get("logged_in") is not None or box.get("error"):
+            _mark_login(name, box.get("logged_in"), box.get("error"))
         LOGIN.pop(name, None)
 
 
@@ -1164,10 +1195,15 @@ def api_profiles():
     base = _profiles_dir()
     out = []
     for p in _get_profiles():
+        st = LOGIN_STATE.get(p["name"]) or {}
         out.append({"name": p["name"], "tabs": int(p.get("tabs", 1)),
                     "email": p.get("email"),          # chỉ email, không có mật khẩu
                     "exists": (base / p["name"]).exists(),
-                    "login_open": p["name"] in LOGIN})
+                    "login_open": p["name"] in LOGIN,
+                    # None = chưa kiểm tra bao giờ; True/False = kết quả lần gần nhất
+                    "logged_in": st.get("logged_in"),
+                    "login_error": st.get("error"),
+                    "checked_at": st.get("at")})
     total = sum(p["tabs"] for p in out)
     return {"profiles": out, "total_tabs": total}
 
@@ -1301,16 +1337,19 @@ def _bulk_one(idx: int, name: str, creds: dict, total: int, sem: threading.Semap
                                           "email": item["email"]})
                             _save_profiles(profs)
                     item["status"] = "done"
+                    _mark_login(name, True)
                     log.info("[%s] Đăng nhập tự động thành công (%s).",
                              name, item["email"])
                 else:
                     item["status"] = "needs_human" if box.get("needs_human") else "failed"
                     item["error"] = box.get("error") or "Cần bạn xác minh thủ công"
+                    _mark_login(name, False, item["error"])
                     _save_login_debug(name, box.pop("snapshot", None))
                 ctx.close()
         except Exception as e:  # noqa: BLE001
             item["status"] = "failed"
             item["error"] = str(e)[:200]
+            _mark_login(name, False, item["error"])
             log.warning("[%s] Đăng nhập hàng loạt lỗi: %s", name, e)
         finally:
             creds.clear()      # xoá mật khẩu khỏi RAM ngay khi dùng xong
@@ -1476,15 +1515,20 @@ def profile_login_close(name: str):
         return {"logged_in": None, "closed": True}
     box["stop"].set()
     box["thread"].join(timeout=15)
-    return {"logged_in": box.get("logged_in"), "error": box.get("error")}
+    ok = box.get("logged_in")
+    _mark_login(name, ok, box.get("error"))
+    return {"logged_in": ok, "error": box.get("error")}
 
 
 @app.post("/api/profiles/{name}/check")
 def check_profile_login(name: str):
     """Kiểm tra nhanh xem profile này đã đăng nhập ChatGPT hay chưa."""
     from playwright.sync_api import sync_playwright
+    if name in LOGIN:
+        raise HTTPException(409, "Cửa sổ đăng nhập của tài khoản này đang mở.")
     udir = _profiles_dir() / name
     if not udir.exists():
+        _mark_login(name, False, "chưa có thư mục profile")
         return {"logged_in": False, "exists": False}
     try:
         with sync_playwright() as pw:
@@ -1500,8 +1544,11 @@ def check_profile_login(name: str):
             time.sleep(1.0)
             logged_in = _check_logged_in(page)
             ctx.close()
+            _mark_login(name, logged_in,
+                        None if logged_in else "chưa đăng nhập ChatGPT")
             return {"logged_in": logged_in, "exists": True}
     except Exception as e:
+        _mark_login(name, False, str(e)[:200])
         return {"logged_in": False, "error": str(e), "exists": True}
 
 
