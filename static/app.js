@@ -651,10 +651,7 @@ async function loadPrompts() {
     for (const id of state.selectedPrompts) {
       if (!validIds.has(id)) state.selectedPrompts.delete(id);
     }
-    if (state.selectedPrompts.size === 0 && state.prompts.length > 0) {
-      state.selectedPrompts.add(state.prompts[0].id);
-      state.promptId = state.prompts[0].id;
-    }
+    state.promptId = [...state.selectedPrompts][0] || null;
     renderPrompts();
   } catch (err) {
     console.error("Lỗi load prompts:", err);
@@ -739,10 +736,11 @@ function renderPrompts() {
     return;
   }
 
-  list.innerHTML = state.prompts.map(p => {
+  list.innerHTML = state.prompts.map((p, idx) => {
     const isSelected = state.selectedPrompts.has(p.id);
     return `
       <div class="prompt-card prompt-item ${isSelected ? "selected" : ""}" data-id="${p.id}" title="Click để chọn/bỏ chọn">
+        <span class="prompt-index">${idx + 1}</span>
         <span class="prompt-card-chk"></span>
         <div class="prompt-content">
           <div class="prompt-title">${esc(p.name)}</div>
@@ -779,16 +777,13 @@ function renderPrompts() {
           || e.target.closest("[data-more]")) return;
       const id = card.dataset.id;
       if (state.selectedPrompts.has(id)) {
-        if (state.selectedPrompts.size > 1) {
-          state.selectedPrompts.delete(id);
-        } else {
-          // nếu chỉ còn 1 mà bấm vào thì giữ nguyên
-        }
+        state.selectedPrompts.delete(id);
       } else {
         state.selectedPrompts.add(id);
       }
       state.promptId = [...state.selectedPrompts][0] || null;
       renderPrompts();
+      updateRunMatrix();
     });
   });
 
@@ -814,14 +809,13 @@ $("#btn-select-all-prompts")?.addEventListener("click", () => {
   if (state.prompts.length === 0) return;
   const all = state.selectedPrompts.size === state.prompts.length;
   if (all) {
-    // Chỉ giữ lại 1 prompt đầu tiên
-    state.selectedPrompts = new Set([state.prompts[0].id]);
+    state.selectedPrompts.clear();
   } else {
-    // Chọn tất cả prompt
     state.selectedPrompts = new Set(state.prompts.map(p => p.id));
   }
   state.promptId = [...state.selectedPrompts][0] || null;
   renderPrompts();
+  updateRunMatrix();
 });
 
 $("#new-prompt")?.addEventListener("click", () => openPromptForm(null));

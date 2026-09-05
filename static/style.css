@@ -2084,6 +2084,28 @@ body {
   border-color: rgba(251, 191, 36, 0.25);
 }
 
+/* Số thứ tự hàng prompt (1, 2, 3...) */
+.prompt-index {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--muted);
+  flex-shrink: 0;
+  margin-top: 1px;
+  user-select: none;
+  line-height: 1;
+  transition: color 0.15s ease;
+}
+
+.prompt-item.selected .prompt-index {
+  color: #8b5cf6;
+  font-weight: 800;
+}
+
 /* Prompt Card Selection Checkbox / Indicator */
 .prompt-card-chk {
   width: 18px;
@@ -2097,6 +2119,7 @@ body {
   color: white;
   transition: all 0.15s ease;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .prompt-item.selected .prompt-card-chk {
