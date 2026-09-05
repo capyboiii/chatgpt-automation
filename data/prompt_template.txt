@@ -57,6 +57,10 @@ OUTPUT:
 - 5 mockups = 5 separate images
 - Never combine multiple mockups into one image.
 - Never create a collage, grid, contact sheet, or multi-product composition.
+- Preserve the exact upload order.
+- Upload #1 → Output #1, Upload #2 → Output #2, Upload #3 → Output #3, and so on.
+- NEVER reorder, shuffle, or swap the output images.
+- The output sequence MUST exactly match the upload sequence.
 
 Every final image must:
 - be square 1:1

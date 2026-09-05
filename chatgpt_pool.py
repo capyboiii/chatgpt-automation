@@ -55,31 +55,90 @@ SEL_STOP = [
     'button[aria-label*="Stop" i]',
 ]
 SEL_FILE_INPUT = 'input[type="file"]'
+# Nút gỡ một ảnh khỏi khung soạn (dùng để dọn sạch trước khi đính bộ mới)
+SEL_ATTACH_REMOVE = ('form button[aria-label*="Remove" i], '
+                     'form button[aria-label*="Xoá" i], '
+                     'form button[aria-label*="Xóa" i], '
+                     'form [data-testid*="remove" i]')
 SEL_NEW_CHAT = [
     'a[data-testid="create-new-chat-button"]',
     'button[data-testid="create-new-chat-button"]',
     'nav a[href="/"]',
 ]
 
+# Mốc nhận diện "đây là lượt trả lời của ChatGPT". ChatGPT đã BỎ
+# [data-message-author-role] (ghi nhận 2026-09-05: log báo "DOM không còn
+# [data-message-author-role]" trên mọi tab), nên phải thử nhiều mốc:
+#   - data-message-author-role : bản cũ
+#   - article[data-turn]       : bản hiện tại, data-turn="assistant" | "user"
+#   - data-testid="conversation-turn-N" : lớp bọc ngoài, chẵn/lẻ không đáng tin
+#     nên chỉ dùng khi hai cái trên đều không có.
+# Mất mốc này là mọi thứ tụt xuống nhánh dự phòng: quét cả <main> nên vơ luôn ảnh
+# template của chính mình, đọc nhầm chữ lỗi của lượt trước, và ORDER_JS không xếp
+# được thứ tự -> đúng loạt cảnh báo "DOM chỉ nhận ra 1/2 ảnh".
+TURN_JS = """
+    const asstTurns = () => {
+        let a = document.querySelectorAll('[data-message-author-role="assistant"]');
+        if (a.length) return Array.from(a);
+        a = document.querySelectorAll('article[data-turn="assistant"], [data-turn="assistant"]');
+        if (a.length) return Array.from(a);
+        a = document.querySelectorAll('[data-testid^="conversation-turn"]');
+        if (a.length) {
+            // Không có data-turn thì loại các lượt CÓ chứa nút sửa tin nhắn của
+            // user (chỉ tin của mình mới có), phần còn lại coi là của ChatGPT.
+            const out = Array.from(a).filter((el) =>
+                !el.querySelector('button[aria-label*="Edit message" i], '
+                                + 'button[data-testid="edit-message-button"]'));
+            if (out.length) return out;
+        }
+        return [];
+    };
+    const userTurns = () => {
+        let u = document.querySelectorAll('[data-message-author-role="user"]');
+        if (u.length) return Array.from(u);
+        return Array.from(document.querySelectorAll(
+            'article[data-turn="user"], [data-turn="user"]'));
+    };
+"""
+
 # 1 lần evaluate lấy CẢ trạng thái đang gen (nút Stop) LẪN danh sách ảnh. Gộp lại
 # vì mỗi round-trip Playwright tốn thời gian; nhiều tab cùng poll thì khoản tiết
 # kiệm này cộng dồn rất nhanh.
-POLL_JS = """() => {
+POLL_JS = """() => {""" + TURN_JS + """
     const vis = (el) => {
         if (!el) return false;
         const r = el.getBoundingClientRect();
         return r.width > 0 && r.height > 0;
     };
+    // "Còn đang gen không" - CHỐT quan trọng nhất: sai cái này là chốt ảnh giữa
+    // chừng lúc ChatGPT mới vẽ xong một nửa. Thử nhiều mốc vì ChatGPT đã đổi DOM
+    // một lần rồi (mất data-message-author-role).
     let busy = false;
     for (const s of ['button[data-testid="stop-button"]',
-                     'button[aria-label*="Stop" i]']) {
+                     'button[data-testid*="stop" i]',
+                     'button[aria-label*="Stop" i]',
+                     'button[aria-label*="Dừng" i]',
+                     '[data-testid="stop-generating"]']) {
         if (vis(document.querySelector(s))) { busy = true; break; }
+    }
+    // Dự phòng: còn ảnh trong câu trả lời chưa nạp xong (naturalWidth = 0) thì
+    // vẫn coi là đang chạy, đừng vội chốt.
+    if (!busy) {
+        const a = asstTurns();
+        const last = a.length ? a[a.length - 1] : null;
+        if (last) {
+            for (const im of last.querySelectorAll('img')) {
+                if (im.closest('form')) continue;
+                const r = im.getBoundingClientRect();
+                if (r.width > 120 && !im.naturalWidth) { busy = true; break; }
+            }
+        }
     }
     // CHỈ lấy ảnh trong lượt trả lời của ChatGPT. Quét cả trang thì ảnh template
     // mình vừa gửi (trong tin nhắn của user + thumbnail ở composer) cũng bị tính
     // là "ảnh mới" -> đếm đủ số quá sớm và tải nhầm chính ảnh gốc.
-    const asst = Array.from(
-        document.querySelectorAll('[data-message-author-role="assistant"]'));
+    const asst = asstTurns();
+    const users = userTurns();
     const roots = asst.length ? asst : [document.querySelector('main') || document.body];
     const imgs = [];
     const seen = new Set();
@@ -87,7 +146,7 @@ POLL_JS = """() => {
         for (const im of root.querySelectorAll('img')) {
             if (im.closest('form')) continue;                  // thumbnail composer
             if (!asst.length &&                                 // fallback: bỏ ảnh
-                im.closest('[data-message-author-role="user"]')) continue;  // của user
+                users.some((u) => u.contains(im))) continue;    // của user
             const src = im.currentSrc || im.src || '';
             if (!src || seen.has(src)) continue;
             seen.add(src);
@@ -101,11 +160,10 @@ POLL_JS = """() => {
 
 # Thứ tự ảnh theo DOM trong lượt trả lời. Dùng để xếp ảnh đúng thứ tự ChatGPT bày
 # ra: response tải song song nên thứ tự về không đáng tin, còn DOM thì ổn định.
-ORDER_JS = r"""() => {
+ORDER_JS = r"""() => {""" + TURN_JS + r"""
     // CHỈ tin nhắn trả lời CUỐI CÙNG có ảnh. Quét cả hội thoại thì ảnh của mấy
     // lô trước cũng lọt vào bảng thứ tự, mà lô nào cũng có ảnh -> lệch chỗ.
-    const asst = Array.from(
-        document.querySelectorAll('[data-message-author-role="assistant"]'));
+    const asst = asstTurns();
     let root = null;
     for (let i = asst.length - 1; i >= 0; i--) {
         if (asst[i].querySelector('img')) { root = asst[i]; break; }
@@ -129,6 +187,36 @@ ORDER_JS = r"""() => {
     }
     return out;
 }"""
+
+
+def _match_order(jobs: list[dict], names: list[str]) -> list[dict] | None:
+    """Sắp lại `jobs` theo thứ tự tên file `names` đọc từ khung soạn.
+
+    Trả None khi không ghép chắc chắn được (tên bị cắt ngắn, trùng nhau, thiếu...)
+    - lúc đó thà giữ nguyên thứ tự cũ còn hơn sắp bừa.
+    """
+    if len(names) != len(jobs):
+        return None
+
+    def norm(x: str) -> str:
+        return re.sub(r"\s+", " ", (x or "").strip().lower()).rstrip(". …")
+
+    remaining = list(jobs)
+    out: list[dict] = []
+    for raw in names:
+        n = norm(raw)
+        if not n:
+            return None
+        hits = [j for j in remaining if norm(Path(j["template"]).name) == n]
+        if not hits:      # tên trên giao diện có thể bị cắt bớt đuôi
+            hits = [j for j in remaining
+                    if norm(Path(j["template"]).name).startswith(n)
+                    or n.startswith(norm(Path(j["template"]).stem))]
+        if len(hits) != 1:
+            return None
+        out.append(hits[0])
+        remaining.remove(hits[0])
+    return out if not remaining else None
 
 
 def _img_key(url: str) -> str:
@@ -182,14 +270,66 @@ ATTACH_JS = """() => {
 }"""
 
 
+# Ảnh ĐANG HIỂN THỊ trong lượt trả lời cuối, theo ĐÚNG thứ tự trên màn hình, kèm
+# kích thước THẬT của ảnh (naturalWidth) để loại thumbnail/icon.
+#
+# Đây là NGUỒN SỰ THẬT DUY NHẤT về "ChatGPT trả mấy ảnh, ảnh nào trước ảnh nào sau".
+# Tầng mạng thấy cả bản dựng dở lẫn bản vẽ lại - những thứ không bao giờ lên màn
+# hình - nên đếm và xếp theo nó là phải đoán, mà đoán thì có lúc trúng lúc trượt.
+FINAL_IMAGES_JS = r"""() => {""" + TURN_JS + r"""
+    const asst = asstTurns();
+    let root = null;
+    for (let i = asst.length - 1; i >= 0; i--) {
+        if (asst[i].querySelector('img')) { root = asst[i]; break; }
+    }
+    if (!root) return [];
+    const out = [];
+    const seen = new Set();
+    for (const im of root.querySelectorAll('img')) {
+        if (im.closest('form')) continue;
+        const src = im.currentSrc || im.src || '';
+        if (!src || seen.has(src)) continue;
+        const nw = im.naturalWidth || 0, nh = im.naturalHeight || 0;
+        const r = im.getBoundingClientRect();
+        seen.add(src);
+        out.push({src, nw, nh, w: Math.round(r.width), h: Math.round(r.height)});
+    }
+    return out;
+}"""
+
+
+# Tên file của các ảnh ĐANG đính kèm, theo ĐÚNG thứ tự chúng nằm trong khung soạn.
+# Đây mới là thứ tự ChatGPT thật sự nhận được, và nó KHÔNG chắc trùng thứ tự mình
+# truyền vào set_input_files: trình duyệt upload song song nên khung soạn xếp theo
+# thứ tự upload xong. Không đối chiếu lại là ảnh túi lưu thành tên ly giữ nhiệt.
+ATTACH_ORDER_JS = """() => {
+    const form = document.querySelector('form') || document.body;
+    const pick = (el) => {
+        const a = el.getAttribute && (el.getAttribute('alt')
+                  || el.getAttribute('title') || el.getAttribute('aria-label'));
+        const t = (a || el.innerText || '').split('\\n')[0].trim();
+        return t;
+    };
+    let nodes = form.querySelectorAll('[data-testid*="attachment" i]');
+    if (!nodes.length) {
+        nodes = form.querySelectorAll('img[src^="blob:"], img[src^="data:"]');
+    }
+    const out = [];
+    for (const n of nodes) {
+        const name = pick(n);
+        if (name) out.push(name);
+    }
+    return out;
+}"""
+
+
 # Lấy phần chữ CÓ Ý NGHĨA để đoán lỗi: hộp thoại + 2 lượt trả lời cuối. Không quét
 # cả trang vì sidebar luôn có chữ "Upgrade plan" -> dễ báo nhầm hết lượt.
-TAIL_JS = """() => {
+TAIL_JS = """() => {""" + TURN_JS + """
     const parts = [];
     const dlg = document.querySelector('[role="dialog"]');
     if (dlg) parts.push(dlg.innerText || '');
-    const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
-    const last = Array.from(msgs).slice(-2);
+    const last = asstTurns().slice(-2);
     for (const m of last) parts.push(m.innerText || '');
     if (!last.length) {
         const main = document.querySelector('main');
@@ -234,6 +374,31 @@ TEMP_ERR_PAT = (
 # cho lọt ảnh nền giao diện 512x512 -> tài khoản nào không gen được ảnh là tool
 # lưu nhầm chính ảnh nền đó làm kết quả.
 MIN_IMG_SIDE = 768
+
+# ChatGPT hay VẼ LẠI một ảnh ở phút chót (đổi vài chi tiết nền). Cả hai bản đều
+# được tải về, khác byte -> khác sha256 -> tool tưởng là HAI ảnh khác nhau. Với lô
+# 2 ảnh mà bắt được 4 luồng, khâu chốt phải đoán, và nó đã đoán sai: giữ lại đúng
+# hai bản của CÙNG một cái túi, vứt mất ảnh áo, rồi đặt cho chúng hai tên khác nhau.
+#
+# Băm tri giác (dHash 16x16 = 256 bit) phân biệt được hai chuyện đó. Đo trên 62 ảnh
+# thật đã gen: hai BẢN của cùng một ảnh cách nhau 8-31 bit, hai ảnh KHÁC NHAU gần
+# nhất cũng cách 69 bit. Lấy 45 làm ranh giới thì rộng rãi cho cả hai phía.
+DUP_HASH_DIST = 45
+
+
+def _phash(im) -> int | None:
+    """dHash 16x16 của một ảnh Pillow đã mở."""
+    try:
+        g = im.convert("L").resize((17, 16), Image.LANCZOS)
+        px = list(g.getdata())
+        bits = 0
+        for r in range(16):
+            row = r * 17
+            for c in range(16):
+                bits = (bits << 1) | (px[row + c] < px[row + c + 1])
+        return bits
+    except Exception:  # noqa: BLE001
+        return None
 MIN_IMG_BYTES = 20_000
 
 # Ảnh của GIAO DIỆN nằm trên CDN tĩnh, ảnh gen nằm ở host nội dung người dùng.
@@ -251,12 +416,13 @@ def _is_ui_asset(url: str) -> bool:
 class _Shot:
     """Một ảnh bắt được: URL + bytes gốc."""
 
-    __slots__ = ("url", "data", "ts", "w", "h")
+    __slots__ = ("url", "data", "ts", "w", "h", "ph")
 
     def __init__(self, url: str, data: bytes | None, seq: float,
-                 w: int = 0, h: int = 0):
+                 w: int = 0, h: int = 0, ph: int | None = None):
         # seq = số thứ tự response về; dùng để xếp ảnh đúng thứ tự ChatGPT trả ra
         self.url, self.data, self.ts, self.w, self.h = url, data, seq, w, h
+        self.ph = ph          # băm tri giác, để nhận ra hai bản của cùng một ảnh
 
 
 class _ImageNet:
@@ -275,6 +441,7 @@ class _ImageNet:
         self._shots: dict[str, _Shot] = {}
         self._ignore: set[str] = set()      # hash các file MÌNH upload lên
         self._seq = 0                       # số thứ tự response, để giữ ĐÚNG thứ tự
+        self._logged_dup: set = set()       # url đã báo "vẽ lại" rồi, khỏi log lặp
         self.armed = False                  # đã thấy ChatGPT bắt đầu gen chưa
         page.on("response", self._on_response)
 
@@ -293,10 +460,35 @@ class _ImageNet:
     def clear(self) -> None:
         """Xoá ảnh đã bắt (giữ danh sách hash cần bỏ qua)."""
         self._shots.clear()
+        self._logged_dup.clear()
 
     def shots(self) -> list[_Shot]:
-        """Ảnh theo ĐÚNG thứ tự response về (= thứ tự ChatGPT gen ra)."""
-        return sorted(self._shots.values(), key=lambda s: s.ts)
+        """Ảnh theo ĐÚNG thứ tự response về, ĐÃ GỘP các bản vẽ lại của cùng một ảnh.
+
+        Gộp ở ĐÂY chứ không phải lúc chốt, vì số lượng ảnh quyết định cả việc "đã
+        đủ chưa": 2 ảnh mà đếm thành 4 thì vòng chờ dừng sớm ngay khi mới có hai
+        bản của cùng một tấm.
+
+        Mỗi nhóm giữ VỊ TRÍ của bản đầu (đó là chỗ ChatGPT đặt tấm ảnh này trong
+        câu trả lời) nhưng lấy BYTES của bản cuối (bản vẽ lại là bản chốt)."""
+        ordered = sorted(self._shots.values(), key=lambda s: s.ts)
+        groups: list[_Shot] = []
+        for sh in ordered:
+            if sh.ph is None:
+                groups.append(sh)
+                continue
+            for i, g in enumerate(groups):
+                if g.ph is not None and bin(g.ph ^ sh.ph).count("1") <= DUP_HASH_DIST:
+                    if sh.url not in self._logged_dup:
+                        # shots() bị gọi mỗi nhịp poll -> chỉ báo một lần cho mỗi ảnh
+                        self._logged_dup.add(sh.url)
+                        log.info("ChatGPT vẽ lại một ảnh - gộp làm một, giữ bản mới "
+                                 "(bỏ %s).", g.url.split("?")[0][-46:])
+                    groups[i] = _Shot(sh.url, sh.data, g.ts, sh.w, sh.h, sh.ph)
+                    break
+            else:
+                groups.append(sh)
+        return groups
 
     def _on_response(self, response) -> None:
         try:
@@ -326,12 +518,15 @@ class _ImageNet:
         if not data or len(data) < 2_000:
             return
         w = h = 0
+        ph = None
         if Image is not None:
             # KÍCH THƯỚC THẬT mới là thước đo đáng tin. Dung lượng thì tuỳ nội dung:
             # một mockup nền trắng nén rất nhẹ, chặn theo KB là loại nhầm ảnh thật.
             try:
                 with Image.open(BytesIO(data)) as im:
                     w, h = im.size
+                    if min(w, h) >= MIN_IMG_SIDE:
+                        ph = _phash(im)
             except Exception:  # noqa: BLE001 - không phải ảnh đọc được
                 return
             if min(w, h) < MIN_IMG_SIDE:
@@ -347,7 +542,7 @@ class _ImageNet:
         # loạt ảnh khác nhau bị nhập làm một -> "gen 3 ảnh mà chỉ lấy được 1".
         if digest in self._shots:
             return                          # đúng ảnh đó, tải lại lần nữa thôi
-        self._shots[digest] = _Shot(response.url, data, seq, w, h)
+        self._shots[digest] = _Shot(response.url, data, seq, w, h, ph)
         log.debug("Bắt được ảnh %dx%d (%.0f KB) %s",
                   w, h, len(data) / 1024, response.url[:90])
 
@@ -377,8 +572,8 @@ class Refused(NoImage):
     y như vậy - retry chỉ tổ mất mấy phút rồi vẫn fail."""
 
 
-def _classify(text: str) -> tuple[str, str]:
-    """(loại lỗi, câu trích) từ phần chữ cuối của trang."""
+def _classify(text: str) -> tuple[str, str, str]:
+    """(loại lỗi, câu trích, MẪU đã khớp) từ phần chữ cuối của trang."""
     flat = " ".join(text.split())
     low = flat.lower()
     for pats, kind in ((QUOTA_PAT, "quota"),
@@ -387,8 +582,8 @@ def _classify(text: str) -> tuple[str, str]:
         for p in pats:
             i = low.find(p)
             if i >= 0:
-                return kind, flat[max(0, i - 60): i + 160].strip()
-    return "", flat[-160:].strip()
+                return kind, flat[max(0, i - 60): i + 160].strip(), p
+    return "", flat[-160:].strip(), ""
 
 
 def _is_dead(err: Exception) -> bool:
@@ -455,7 +650,9 @@ class ChatGPTPool:
         self.max_retries = int(r.get("max_retries", 2))
         # số ảnh gửi kèm trong MỘT tin nhắn. ChatGPT có trần đính kèm nên nhiều ảnh
         # phải chia lô - nhưng các lô đi tiếp trong CÙNG chat để giữ nguyên design.
-        self.batch_size = max(1, int(r.get("batch_size", 6)))
+        # <= 0 = gửi CẢ BỘ trong một tin nhắn (mặc định, xem chú thích ở chỗ chia
+        # lô trong _run_collection_on_slot). Số dương = trần số ảnh mỗi tin nhắn.
+        self.batch_size = int(r.get("batch_size", 0) or 0)
         self.warnings: list[str] = []      # cảnh báo cho UI (không chặn lượt gen)
         self._warned_dom = False           # đã cảnh báo DOM đổi cấu trúc chưa
         self.topup_prompt = (r.get("topup_prompt") or
@@ -502,6 +699,14 @@ class ChatGPTPool:
         # Thời gian im lặng tối đa khi ChatGPT trả thiếu ảnh: nếu đã có ít nhất 1 ảnh
         # và ChatGPT ngừng tạo quá 10s, lập tức lưu ảnh và gửi yêu cầu gen tiếp.
         self.quiet_limit_got = float(r.get("quiet_limit_seconds", 10))
+        # Trần cứng cho MỘT lô, bất kể lô có bao nhiêu ảnh. Trước đây ngân sách là
+        # generation_timeout * số ảnh = 300 x 6 = 30 PHÚT: ChatGPT ra được 1 ảnh
+        # rồi treo là tài khoản đó ngồi không nửa tiếng, mà stall_timeout không
+        # cứu được vì nó chỉ tính khi CHƯA ra nổi ảnh nào.
+        self.batch_timeout = float(r.get("batch_timeout", 900))
+        # Bao lâu KHÔNG có thêm ảnh mới thì coi như chết hẳn. Đây mới là cái chốt
+        # thật sự: đang ra ảnh đều thì chạy tiếp thoải mái, ngừng ra là cắt sớm.
+        self.no_progress_timeout = float(r.get("no_progress_timeout", 180))
 
     # ---------------- lifecycle ----------------
     async def __aenter__(self) -> "ChatGPTPool":
@@ -750,12 +955,47 @@ class ChatGPTPool:
                 pass
             return False
 
+    async def _attached_names(self, page: Page) -> list[str]:
+        """Tên file các ảnh đang đính kèm, theo đúng thứ tự trong khung soạn."""
+        try:
+            return [str(x) for x in (await page.evaluate(ATTACH_ORDER_JS) or [])]
+        except Exception:  # noqa: BLE001
+            return []
+
     async def _count_attached(self, page: Page) -> int:
         """Số ảnh đang đính kèm trong khung soạn."""
         try:
             return int((await page.evaluate(ATTACH_JS)).get("n", 0))
         except Exception:  # noqa: BLE001
             return 0
+
+    async def _clear_attachments(self, page: Page) -> bool:
+        """Gỡ sạch ảnh còn sót trong khung soạn TRƯỚC khi đính bộ mới.
+
+        VÌ SAO PHẢI CÓ: `set_input_files` chỉ THÊM ảnh vào khung soạn, không thay
+        thế. Lần đính kèm trước hụt giờ (mới lên 3/6 ảnh) hoặc gửi hụt là mấy ảnh
+        đó nằm nguyên đấy; vòng sau đính thêm 6 nữa thành 9. Điều kiện "n >= want"
+        vẫn thoả nên tool tưởng ngon, gửi đi 9 ảnh, ChatGPT làm đủ 9, rồi tool lấy
+        6 ảnh ĐẦU -> 3 ảnh trùng của lượt hỏng + 3 ảnh đầu của lô, và TOÀN BỘ tên
+        file lệch. Đây là đường ngắn nhất dẫn tới 'ảnh cốc mang tên áo'.
+        """
+        if await self._count_attached(page) == 0:
+            return True
+        for _ in range(30):                     # tối đa 30 ảnh, gỡ từng cái
+            try:
+                btn = page.locator(SEL_ATTACH_REMOVE).first
+                if not await btn.count():
+                    break
+                await btn.click(timeout=2_000)
+                await page.wait_for_timeout(160)
+            except Exception:  # noqa: BLE001
+                break
+        left = await self._count_attached(page)
+        if left:
+            log.warning("Còn %d ảnh cũ trong khung soạn không gỡ được.", left)
+            return False
+        log.info("Đã gỡ ảnh cũ còn sót trong khung soạn.")
+        return True
 
     async def _attach_via_chooser(self, page: Page, files: list[str]) -> bool:
         """Dự phòng: bấm nút "+" rồi hứng hộp thoại chọn file.
@@ -793,6 +1033,9 @@ class ChatGPTPool:
         """
         want = len(templates)
         files = [str(t) for t in templates]
+        # Dọn trước, luôn luôn. Đính đè lên đống cũ là hỏng hết thứ tự (xem
+        # _clear_attachments).
+        await self._clear_attachments(page)
         try:
             await page.locator(SEL_FILE_INPUT).first.wait_for(state="attached",
                                                               timeout=10_000)
@@ -826,6 +1069,9 @@ class ChatGPTPool:
                 break
             log.info("Input '%s' không nhận ảnh - thử input khác.",
                      ident or "(không id)")
+            # Có thể input đó VẪN ăn, chỉ là upload chậm hơn 5s. Không dọn thì lát
+            # nữa ảnh của nó hiện ra cộng với ảnh của input sau -> nhân đôi cả lô.
+            await self._clear_attachments(page)
 
         if not attached and not await self._attach_via_chooser(page, files):
             log.warning("Không nhét được ảnh vào khung soạn (đã thử %d input).",
@@ -840,8 +1086,14 @@ class ChatGPTPool:
             if st["n"] != last_n:
                 last_n = st["n"]
                 log.debug("đính kèm %d/%d", st["n"], want)
-            if st["n"] >= want and not st["uploading"]:
+            if st["n"] == want and not st["uploading"]:
                 return True
+            if st["n"] > want and not st["uploading"]:
+                # Thừa ảnh = còn sót của lượt trước hoặc đính hai lần. Gửi đi là
+                # sai tên cả lô, thà dọn rồi làm lại từ đầu.
+                log.warning("Khung soạn có %d ảnh trong khi lô chỉ cần %d - dọn lại.",
+                            st["n"], want)
+                return False
             await page.wait_for_timeout(600)
         log.warning("Mới đính kèm %d/%d ảnh sau %ds.", max(last_n, 0), want, wait_s)
         return False
@@ -870,7 +1122,29 @@ class ChatGPTPool:
         log.warning("Đính kèm thất bại cả 2 lần (mạng chậm hoặc trang chưa nạp xong).")
         return False
 
+    async def _user_msgs(self, page: Page) -> int:
+        """Số tin nhắn của mình trong hội thoại - mốc để biết đã gửi đi thật chưa."""
+        try:
+            return await page.locator('[data-message-author-role="user"]').count()
+        except Exception:  # noqa: BLE001
+            return -1
+
+    async def _sent_ok(self, page: Page, before: int, timeout: float = 12.0) -> bool:
+        """Tin nhắn đã RỜI khung soạn chưa.
+
+        Dấu hiệu chắc nhất: có thêm một tin nhắn của user. Dự phòng: khung soạn
+        sạch ảnh (ChatGPT chỉ xoá đính kèm khi đã gửi thành công)."""
+        deadline = asyncio.get_event_loop().time() + timeout
+        while asyncio.get_event_loop().time() < deadline:
+            if before >= 0 and await self._user_msgs(page) > before:
+                return True
+            if await self._count_attached(page) == 0:
+                return True
+            await page.wait_for_timeout(400)
+        return False
+
     async def _send(self, page: Page, prompt: str) -> None:
+        before = await self._user_msgs(page)
         box = await self._find(page, SEL_PROMPT, 15_000)
         await box.click()
         # DÁN cả prompt 1 lần bằng execCommand('insertText'), KHÔNG gõ từng ký tự.
@@ -908,6 +1182,23 @@ class ChatGPTPool:
             await box.click()
             await page.keyboard.press("Enter")
 
+        # XÁC NHẬN đã gửi. Trước đây bấm xong là coi như xong: gửi hụt thì phải chờ
+        # hết 30s pha 1 của _wait_images mới biết, mà tệ hơn là bộ ảnh vẫn treo
+        # trong khung soạn để vòng sau đính chồng lên.
+        if await self._sent_ok(page, before):
+            return
+        log.warning("Bấm gửi rồi mà tin nhắn chưa đi - thử Enter lần nữa.")
+        try:
+            await box.click()
+            await page.keyboard.press("Enter")
+        except Exception:  # noqa: BLE001
+            pass
+        if await self._sent_ok(page, before, timeout=8.0):
+            return
+        # Ném lỗi để vòng retry lo: vòng sau _attach_once sẽ dọn sạch khung soạn
+        # trước khi đính lại, nên không bị cộng dồn.
+        raise RuntimeError("không gửi được tin nhắn (nút gửi không ăn)")
+
     @staticmethod
     def _pick(imgs: list[dict]) -> list[str]:
         """Lọc ảnh mockup thật (bỏ avatar/icon nhỏ, bỏ trùng)."""
@@ -932,8 +1223,8 @@ class ChatGPTPool:
             # Mất mốc này thì không tách được tin của mình với tin ChatGPT trả lời;
             # tool vẫn chạy bằng nhánh dự phòng nhưng đáng để biết mà cập nhật.
             self._warned_dom = True
-            msg = ("DOM ChatGPT không còn [data-message-author-role] - đang dùng "
-                   "nhánh dự phòng, việc nhận diện ảnh kém chính xác hơn.")
+            msg = ("Không nhận ra được lượt trả lời của ChatGPT (DOM đã đổi) - "
+                   "đang quét cả trang, nhận diện ảnh kém chính xác hơn.")
             log.warning(msg)
         return bool(st["busy"]), self._pick(st["imgs"])
 
@@ -948,7 +1239,7 @@ class ChatGPTPool:
         except Exception:  # noqa: BLE001
             return ""
 
-    async def _diagnose(self, page: Page) -> tuple[str, str]:
+    async def _diagnose(self, page: Page) -> tuple[str, str, str]:
         """Đọc chữ cuối trang để biết vì sao chưa có ảnh."""
         return _classify(await self._tail(page))
 
@@ -958,12 +1249,15 @@ class ChatGPTPool:
         Thiếu nó thì vòng xin làm nốt sẽ đọc lại đúng dòng "Something went wrong"
         của lượt hỏng trước rồi fail ngay, dù lượt mới đang chạy ngon lành."""
         text = await self._tail(page)
-        kind, msg = _classify(text)
-        # Lỗi tạm / từ chối là chuyện của TỪNG LƯỢT: chữ y hệt lúc trước khi gửi thì
-        # đó là tàn dư của lượt cũ, bỏ qua. Riêng HẾT LƯỢT thì không hoãn - nó có thể
-        # hiện ra ngay trước khi mình kịp chụp lại màn hình, mà bỏ sót là gửi tiếp
-        # trong vô vọng.
-        if kind != "quota" and stale is not None and text == stale:
+        kind, msg, pat = _classify(text)
+        # Lỗi tạm / từ chối là chuyện của TỪNG LƯỢT: câu lỗi ĐÃ CÓ SẴN trước khi
+        # gửi thì đó là tàn dư của lượt cũ, bỏ qua. So khớp theo MẪU chứ không so
+        # nguyên khối chữ: khối chữ luôn đổi vài ký tự (đồng hồ "Worked for 2m 35s",
+        # nút "Show more") nên so nguyên khối là không bao giờ khớp, và tool báo
+        # lỗi của lượt trước cho lượt đang chạy ngon lành.
+        # Riêng HẾT LƯỢT thì không hoãn - nó có thể hiện ra ngay trước khi mình kịp
+        # chụp lại màn hình, mà bỏ sót là gửi tiếp trong vô vọng.
+        if kind != "quota" and pat and stale and pat in " ".join(stale.split()).lower():
             return
         if kind == "quota":
             raise QuotaExceeded(f"tài khoản hết lượt tạo ảnh — {msg}")
@@ -995,6 +1289,92 @@ class ChatGPTPool:
             idx += 1
         return rank
 
+    async def _screen_images(self, page: Page) -> list[dict]:
+        """Ảnh đang hiển thị trong câu trả lời cuối, theo thứ tự, đã bỏ icon nhỏ."""
+        try:
+            raw = await page.evaluate(FINAL_IMAGES_JS) or []
+        except Exception:  # noqa: BLE001
+            return []
+        out = []
+        for it in raw:
+            nw, nh = int(it.get("nw") or 0), int(it.get("nh") or 0)
+            # naturalWidth là kích thước THẬT của file ảnh, không phải cỡ hiển thị:
+            # ChatGPT bày ảnh 1024px trong khung 200px, lọc theo cỡ hiển thị là
+            # vứt nhầm ảnh thật.
+            if nw and nh and min(nw, nh) < MIN_IMG_SIDE:
+                continue
+            if not nw and (it.get("w") or 0) < 120:
+                continue                      # chưa nạp xong mà lại bé -> icon
+            out.append(it)
+        return out
+
+    async def _bytes_of(self, page: Page, src: str) -> bytes | None:
+        """Tải đúng tấm ảnh đang hiển thị. Chạy fetch TRONG trang nên mang cookie
+        đăng nhập, và đọc được cả `blob:` do chính trang tạo ra."""
+        try:
+            if src.startswith("data:"):
+                return base64.b64decode(src.split(",", 1)[1])
+            b64 = await page.evaluate(
+                """async u => {
+                    const r = await fetch(u, {credentials:'include'});
+                    if (!r.ok) return null;
+                    const b = await r.blob();
+                    return await new Promise(res=>{const f=new FileReader();
+                        f.onload=()=>res(f.result.split(',')[1]);f.readAsDataURL(b);});
+                }""", src)
+            return base64.b64decode(b64) if b64 else None
+        except Exception as e:  # noqa: BLE001
+            log.debug("Không tải được ảnh %s: %s", src[:70], e)
+            return None
+
+    async def _from_screen(self, page: Page, shots: list[_Shot],
+                           want: int) -> list[_Shot] | None:
+        """Dựng danh sách kết quả TỪ MÀN HÌNH: thứ tự và danh tính đều lấy từ DOM.
+
+        Ảnh nào đã bắt được ở tầng mạng thì dùng lại bytes đó (khỏi tải lần nữa);
+        ảnh nào không khớp - điển hình là ảnh vừa gen xong ChatGPT hiển thị bằng
+        `blob:` - thì tải thẳng từ trang. Không khớp nổi cái nào cũng không sao,
+        vì bytes luôn lấy được.
+
+        Trả None khi màn hình không cho đủ `want` ảnh, để caller quay về cách cũ."""
+        dom = await self._screen_images(page)
+        if len(dom) < want:
+            return None
+
+        by_key = {}
+        for sh in shots:
+            if sh.data:
+                by_key.setdefault(_img_key(sh.url), sh)
+
+        out: list[_Shot] = []
+        reused = 0
+        for i, it in enumerate(dom[:want]):
+            src = it["src"]
+            sh = by_key.get(_img_key(src))
+            if sh is not None and sh.data:
+                reused += 1
+                out.append(_Shot(src, sh.data, i, sh.w, sh.h, sh.ph))
+                continue
+            data = await self._bytes_of(page, src)
+            if not data:
+                log.warning("Ảnh thứ %d trên màn hình không tải được (%s).",
+                            i + 1, src[:60])
+                return None
+            w = h = 0
+            ph = None
+            if Image is not None:
+                try:
+                    with Image.open(BytesIO(data)) as im:
+                        w, h = im.size
+                        ph = _phash(im)
+                except Exception:  # noqa: BLE001
+                    pass
+            out.append(_Shot(src, data, i, w, h, ph))
+
+        log.info("Lấy %d ảnh theo đúng thứ tự trên màn hình (%d dùng lại bytes đã "
+                 "bắt, %d tải thêm).", len(out), reused, len(out) - reused)
+        return out
+
     async def _finalize(self, page: Page, shots: list[_Shot], want: int) -> list[_Shot]:
         """Chốt danh sách ảnh: xếp đúng thứ tự và bỏ ảnh thừa.
 
@@ -1005,6 +1385,15 @@ class ChatGPTPool:
 
         Chỉ khi DOM không cho đủ thông tin mới quay về suy đoán theo dung lượng.
         """
+        # ƯU TIÊN TUYỆT ĐỐI: lấy đúng những ảnh đang hiển thị, theo thứ tự hiển
+        # thị. Chỉ khi màn hình không cho đủ ảnh mới quay về ghép với tầng mạng.
+        for attempt in range(4):
+            picked = await self._from_screen(page, shots, want)
+            if picked is not None:
+                return picked
+            if attempt < 3:
+                await page.wait_for_timeout(1_200)
+
         if len(shots) <= 1:
             return shots
 
@@ -1099,19 +1488,29 @@ class ChatGPTPool:
             await self._raise_if_bad(page, stale)
             raise NoImage("gửi xong nhưng ChatGPT không phản hồi")
 
-        # pha 2: chờ đủ ảnh. Ngân sách thời gian nhân theo số ảnh của lô.
-        # "quiet" = hết busy mà chưa đủ ảnh -> nhiều khả năng nó trả lời bằng chữ
-        # (từ chối / hỏi lại / hết lượt): soi ngay thay vì chờ hết giờ.
-        deadline = loop.time() + self.gen_timeout * want
+        # pha 2: chờ đủ ảnh. HAI mốc dừng, cái nào tới trước thì thôi:
+        #   - deadline: trần cứng cho cả lô (min của gen_timeout*want và batch_timeout)
+        #   - idle_deadline: cuộn theo tiến độ, cứ có thêm một ảnh là gia hạn tiếp.
+        # Nhờ mốc thứ hai mà lô "ra 1 ảnh rồi treo" chết sau vài phút chứ không
+        # ngồi hết cả trần.
+        budget = min(self.gen_timeout * want, self.batch_timeout)
+        deadline = loop.time() + budget
+        idle_deadline = loop.time() + self.no_progress_timeout
+        seen_n = 0
         quiet_since = None
         ready_since = None            # từ lúc nào thì "đủ ảnh và không đổi nữa"
         ready_keys = None
         next_diag = 0.0
         got: list[_Shot] = []
-        while loop.time() < deadline:
+        while loop.time() < deadline and loop.time() < idle_deadline:
             busy, srcs = await self._poll(page)
             arm(busy)
             got = best(srcs)
+
+            # Có thêm ảnh = còn sống -> gia hạn mốc "không tiến triển".
+            if len(got) > seen_n:
+                seen_n = len(got)
+                idle_deadline = loop.time() + self.no_progress_timeout
 
             # Đủ số ảnh CHƯA CHẮC đã xong: ChatGPT hay vẽ lại một ảnh ở phút chót,
             # có khi nút Stop cũng biến mất một nhịp giữa hai lần gọi công cụ. Nên
@@ -1137,6 +1536,17 @@ class ChatGPTPool:
                         await self._raise_if_bad(page, stale)
                     except QuotaExceeded as e:
                         raise QuotaExceeded(str(e), got) from None   # giữ ảnh đã có
+                    except NoImage as e:
+                        # ĐÃ CÓ ảnh trong tay mà trang lại hiện "Something went
+                        # wrong": đó là băng lỗi của lần thử trước hoặc lỗi phụ,
+                        # không phải lượt này hỏng. Ném ra lúc này là bỏ ngang khi
+                        # ảnh đã về, phải nhờ nhánh vớt mới cứu - mà nhánh vớt xếp
+                        # thứ tự kém chính xác hơn hẳn. Cứ chờ, quiet_limit sẽ chốt.
+                        if not got:
+                            raise
+                        log.info("Trang có báo lỗi nhưng đã nhận %d/%d ảnh - chờ "
+                                 "tiếp thay vì bỏ lượt (%s).",
+                                 len(got), want, str(e)[:90])
                     next_diag = now + 8
                 # Chưa đủ ảnh mà đã im: nếu đã có ít nhất 1 ảnh và ChatGPT ngừng busy quá 10s,
                 # lập tức chốt ảnh đã có và gửi yêu cầu gen tiếp, không bắt người dùng chờ 75s.
@@ -1152,11 +1562,16 @@ class ChatGPTPool:
                     raise NoImage("ChatGPT trả lời xong nhưng không có ảnh")
             await page.wait_for_timeout(1_000)
 
+        stuck = loop.time() >= idle_deadline
         if got:
-            log.warning("Hết giờ, mới có %d/%d ảnh.", len(got), want)
+            log.warning("%s, mới có %d/%d ảnh.",
+                        f"Đứng im {int(self.no_progress_timeout)}s" if stuck
+                        else "Hết giờ", len(got), want)
             return await self._finalize(page, got, want)
         await self._raise_if_bad(page, stale)
-        raise NoImage(f"quá {self.gen_timeout * want}s vẫn chưa có ảnh")
+        raise NoImage(
+            f"đứng im {int(self.no_progress_timeout)}s không ra thêm ảnh nào" if stuck
+            else f"quá {int(budget)}s vẫn chưa có ảnh")
 
     async def _save(self, page: Page, shot: _Shot, dest: Path) -> bool:
         """Lưu ảnh: bắt được từ mạng thì ghi thẳng bytes, không thì mới tải lại."""
@@ -1267,10 +1682,24 @@ class ChatGPTPool:
         await self._set_thinking(page)
 
         seen = set(await self._collect(page))
-        chunks = [pending_jobs[i:i + self.batch_size]
-                  for i in range(0, len(pending_jobs), self.batch_size)]
-        log.info("[%s] Bắt đầu gen collection '%s' (%d ảnh, %d lô) trên tài khoản %s.",
-                 slot.label, col.get("name"), len(pending_jobs), len(chunks), slot.profile)
+
+        # CẢ BỘ trong MỘT tin nhắn, một khung chat. Không tách lô, không gom nhóm.
+        # Khuôn prompt yêu cầu ChatGPT "coi mọi mockup trong cùng một request là
+        # một bộ sản phẩm" và bắt mỗi ảnh phải có nền KHÁC nhau - nó chỉ làm được
+        # khi nhìn thấy cả bộ cùng lúc. Chia nhỏ ra là mỗi lô chốt một hướng
+        # design/nền riêng, mất đúng cái tính đồng nhất mà cả kiến trúc này sinh
+        # ra để giữ.
+        #
+        # `run.batch_size` <= 0 (mặc định) nghĩa là cả bộ. Đặt số dương chỉ khi
+        # buộc phải chia (bộ quá lớn so với giới hạn đính kèm của ChatGPT).
+        if self.batch_size > 0:
+            chunks = [pending_jobs[i:i + self.batch_size]
+                      for i in range(0, len(pending_jobs), self.batch_size)]
+        else:
+            chunks = [pending_jobs]
+        log.info("[%s] Bắt đầu gen collection '%s' (%d ảnh%s) trên tài khoản %s.",
+                 slot.label, col.get("name"), len(pending_jobs),
+                 "" if len(chunks) == 1 else f", {len(chunks)} lô", slot.profile)
 
         quota: str | None = None
         refused: str | None = None      # bị từ chối vì nội dung -> khỏi thử tiếp
@@ -1286,11 +1715,15 @@ class ChatGPTPool:
             pending = list(chunk)
             first_msg = (ci == 0)
             last_err: Exception | None = None
+            # solo = từ giờ mỗi tin nhắn chỉ hỏi ĐÚNG MỘT ảnh. Bật lên khi lô này
+            # đã một lần trả thiếu, tức là không còn tin được thứ tự nữa.
+            solo = False
 
-            for round_no in range(1, self.max_retries + 2):
+            for round_no in range(1, self.max_retries + 2 + len(chunk)):
                 if not pending or quota or refused or self.stopped:
                     break
-                tpls = [Path(j["template"]) for j in pending]
+                batch = pending[:1] if solo else pending
+                tpls = [Path(j["template"]) for j in batch]
                 if slot.net:
                     slot.net.clear()          # chỉ tính ảnh của VÒNG NÀY
                     slot.net.armed = False
@@ -1300,6 +1733,23 @@ class ChatGPTPool:
                     if not await self._upload(
                             page, tpls, allow_new_chat=(first_msg and round_no == 1)):
                         raise RuntimeError("không đính kèm được ảnh template")
+
+                    # THỨ TỰ THẬT: đọc lại khung soạn xem ChatGPT sẽ nhận ảnh theo
+                    # thứ tự nào. Trình duyệt upload song song nên nó hay khác thứ
+                    # tự mình truyền vào - không đối chiếu là toàn bộ tên file lệch.
+                    if len(batch) > 1:
+                        names = await self._attached_names(page)
+                        fixed = _match_order(batch, names)
+                        if fixed is None:
+                            log.warning(
+                                "[%s] Không đọc chắc được thứ tự đính kèm (%s) - "
+                                "giữ thứ tự gửi đi, tên file có thể lệch.",
+                                slot.label, ", ".join(names) or "trống")
+                        elif [id(x) for x in fixed] != [id(x) for x in batch]:
+                            log.info("[%s] Khung soạn xếp lại thứ tự ảnh -> đổi theo: %s",
+                                     slot.label,
+                                     " | ".join(Path(j["template"]).name for j in fixed))
+                            batch = fixed
                     if first_msg:
                         text = col.get("prompt") or chunk[0].get("prompt")
                     elif round_no == 1:
@@ -1308,7 +1758,7 @@ class ChatGPTPool:
                         text = self.topup_prompt
                     await self._send(page, text)
                     first_msg = False
-                    imgs = await self._wait_images(page, seen, len(pending), slot.net)
+                    imgs = await self._wait_images(page, seen, len(batch), slot.net)
                 except QuotaExceeded as e:
                     quota = str(e)
                     imgs = e.images               # ảnh kịp nhận trước khi bị chặn
@@ -1337,13 +1787,25 @@ class ChatGPTPool:
                         except Exception:  # noqa: BLE001
                             have = []
                     if have:
-                        imgs = await self._finalize(page, have, len(pending))
+                        imgs = await self._finalize(page, have, len(batch))
                         log.warning("[%s] vẫn nhặt được %d ảnh trước khi lỗi.",
                                     slot.label, len(imgs))
 
-                imgs = imgs[:len(pending)]
+                # TRẢ THIẾU thì KHÔNG được gán theo vị trí. Gán kiểu đó ngầm cho
+                # rằng mấy ảnh nhận được ứng với mấy template ĐẦU danh sách; ChatGPT
+                # bỏ qua một cái ở giữa là toàn bộ tên phía sau lệch một nấc, và
+                # vòng "xin làm nốt" sau đó lệch tiếp. Thà bỏ lượt này rồi hỏi lại
+                # từng ảnh một - lúc đó mỗi tin nhắn một template, không thể lệch.
+                if imgs and len(imgs) < len(batch) and len(batch) > 1:
+                    log.warning("[%s] col '%s': gửi %d template mà chỉ nhận %d ảnh "
+                                "-> bỏ lượt này, hỏi lại từng ảnh một cho khỏi lệch tên.",
+                                slot.label, col.get("name"), len(batch), len(imgs))
+                    solo = True
+                    imgs = []
+
+                imgs = imgs[:len(batch)]
                 seen |= {sh.url for sh in imgs}
-                for j, shot in zip(pending, imgs):   # gán theo thứ tự ảnh hiện ra
+                for j, shot in zip(batch, imgs):     # gán theo thứ tự ảnh hiện ra
                     ok = False
                     try:
                         ok = await self._save(page, shot, Path(j["dest"]))
@@ -1376,9 +1838,10 @@ class ChatGPTPool:
                         f"đứng hình {int(idle)}s không ra ảnh nào "
                         f"({last_err or 'không rõ nguyên nhân'})", on_update)
 
-                if pending and not quota and not refused and round_no <= self.max_retries:
-                    log.warning("[%s] col '%s' còn thiếu %d ảnh -> xin ChatGPT làm nốt.",
-                                slot.label, col.get("name"), len(pending))
+                if pending and not quota and not refused:
+                    log.warning("[%s] col '%s' còn thiếu %d ảnh -> xin ChatGPT làm nốt%s.",
+                                slot.label, col.get("name"), len(pending),
+                                " (từng ảnh một)" if solo else "")
                     await asyncio.sleep(2)
 
             for j in pending:

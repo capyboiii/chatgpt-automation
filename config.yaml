@@ -2,22 +2,36 @@ browser:
   headless: false
   profiles_dir: ./.chrome-profiles
   profiles:
-  - name: acc1
+  - name: acc4
     tabs: 1
-    email: sdfghgfhgh+2346ersd@gmail.com
+    email: russobranham5854+1@gmail.com
+  - name: acc3
+    tabs: 1
+    email: yenyeusung@gmail.com
   - name: acc2
     tabs: 1
+    email: nguyenthuong17933@gmail.com
+  - name: acc6
+    tabs: 1
     email: hoffmannbremer574@googlemail.com
+  - name: acc5
+    tabs: 1
+    email: ethane.subway.4v+5ue8k0g@icloud.com
+  - name: acc7
+    tabs: 1
+    email: sdfghgfhgh+2346ersd@gmail.com
   tabs_per_account: 1
   generation_timeout: 300
   nav_timeout: 90
 run:
   max_retries: 3
-  batch_size: 6
+  batch_size: 0
   settle_seconds: 8
   stall_timeout: 120
   idle_exit_seconds: 2
   quiet_limit_seconds: 10
+  batch_timeout: 900
+  no_progress_timeout: 180
   thinking: vừa
 login:
   parallel: 0
