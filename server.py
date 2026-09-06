@@ -1006,21 +1006,76 @@ async def stop_jobs():
     }
 
 
+def _under(path: Path, base: Path) -> bool:
+    """`path` có nằm trong `base` không (chống xoá ra ngoài thư mục output)."""
+    try:
+        path.resolve().relative_to(base.resolve())
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _wipe_outputs(folders: set[str]) -> tuple[int, int]:
+    """Xoá ảnh kết quả của các thư mục đã cho. Trả (số ảnh, số thư mục) đã xoá.
+
+    Chỉ đụng tới file ảnh nằm TRONG designs/ (và data/outputs/ đường dẫn cũ) -
+    mọi đường dẫn đều kiểm lại bằng `_under` trước khi xoá, để một cái tên thư
+    mục bậy bạ trong state không thể lôi thao tác xoá ra ngoài."""
+    n_files = n_dirs = 0
+    for base in (OUTPUTS, LEGACY_OUTPUTS):
+        for folder in folders:
+            if not folder:
+                continue
+            d = (base / folder)
+            if not d.is_dir() or not _under(d, base):
+                continue
+            for f in list(d.iterdir()):
+                if f.is_file() and f.suffix.lower() in IMG_EXT and _under(f, base):
+                    try:
+                        f.unlink()
+                        n_files += 1
+                    except Exception as e:  # noqa: BLE001
+                        log.warning("Không xoá được %s: %s", f.name, e)
+            try:                          # thư mục rỗng thì dọn luôn cho sạch
+                if not any(d.iterdir()):
+                    d.rmdir()
+                    n_dirs += 1
+            except Exception:  # noqa: BLE001
+                pass
+    return n_files, n_dirs
+
+
 @app.delete("/api/jobs")
-def clear_jobs():
+def clear_jobs(keep_files: bool = False):
+    """Xoá kết quả: cả danh sách trên UI LẪN ảnh đã gen trong designs/.
+
+    Giữ lại file thì lần gen sau `skip_done` vẫn thấy thư mục có ảnh và bỏ qua -
+    tức là bấm "Xoá kết quả" xong vẫn không gen lại được, rất khó hiểu. Muốn giữ
+    file thì gọi kèm ?keep_files=true."""
     global ACTIVE_POOL
     if ACTIVE_POOL:
         ACTIVE_POOL.stop()
     RUN["active"] = False
     RUN["stopped"] = False
+
+    folders = {j.get("folder", "") for j in JOBS.values()}
+    for c in COLLECTIONS.values():
+        folders |= {j.get("folder", "") for j in c.get("jobs", [])}
+
     JOBS.clear()
     COLLECTIONS.clear()
     if COLLECTIONS_STATE_FILE.exists():
         try:
             COLLECTIONS_STATE_FILE.unlink()
-        except Exception:
+        except Exception:  # noqa: BLE001
             pass
-    return {"ok": True}
+
+    if keep_files:
+        return {"ok": True, "deleted_files": 0, "deleted_folders": 0}
+
+    n_files, n_dirs = _wipe_outputs(folders)
+    log.info("Xoá kết quả: %d ảnh, %d thư mục trong designs/.", n_files, n_dirs)
+    return {"ok": True, "deleted_files": n_files, "deleted_folders": n_dirs}
 
 
 

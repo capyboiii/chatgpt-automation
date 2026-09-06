@@ -632,6 +632,40 @@ async function loadTemplates() {
   }
 }
 
+// Poll 2.2s/lần mà lần nào cũng dựng lại innerHTML thì hiệu ứng vào-màn-hình
+// chớp lại liên tục, hover mất, cú click đang dở bị hụt. Chỉ vẽ khi dữ liệu THẬT
+// SỰ đổi; những thay đổi nhỏ (chọn/bỏ chọn) thì sửa tại chỗ, không vẽ lại.
+const _sig = {};
+function changed(key, data) {
+  const s = JSON.stringify(data);
+  if (_sig[key] === s) return false;
+  _sig[key] = s;
+  return true;
+}
+
+// Đánh số cho từng thẻ để CSS giãn thời điểm hiện ra (hiệu ứng đổ dây).
+function stagger(root, sel) {
+  root.querySelectorAll(sel).forEach((el, i) => {
+    el.style.setProperty("--i", Math.min(i, 14));
+  });
+}
+
+function syncTplCount() {
+  const el = $("#tpl-count .stat-val") || $("#tpl-count");
+  if (el) el.textContent = `${state.selected.size} / ${state.templates.length} đã chọn`;
+  const chk = $("#select-all");
+  if (chk) chk.checked = state.templates.length > 0
+                      && state.selected.size === state.templates.length;
+  updateRunMatrix();
+}
+
+function markTplSelected(card, on) {
+  card.classList.toggle("selected", on);
+  const badge = card.querySelector(".tpl-badge-select");
+  if (badge) badge.textContent = on ? "✓" : "+";
+  card.title = `Click để ${on ? "bỏ chọn" : "chọn"} ảnh`;
+}
+
 function renderTemplates() {
   const grid = $("#tpl-grid");
   const empty = $("#tpl-empty");
@@ -656,6 +690,17 @@ function renderTemplates() {
   const q = state.filterQuery.toLowerCase().trim();
   const displayed = q ? state.templates.filter(t => t.name.toLowerCase().includes(q)) : state.templates;
 
+  // Danh sách ảnh và ô tìm kiếm mới là thứ quyết định phải vẽ lại; việc chọn/bỏ
+  // chọn được xử lý tại chỗ ở dưới nên không tính vào đây.
+  if (!changed("tpl", [displayed.map(t => t.name)])) {
+    displayed.forEach(t => {
+      const card = grid.querySelector(`.tpl-card[data-name="${CSS.escape(t.name)}"]`);
+      if (card) markTplSelected(card, state.selected.has(t.name));
+    });
+    syncTplCount();
+    return;
+  }
+
   grid.innerHTML = displayed.map(t => {
     const isSelected = state.selected.has(t.name);
     return `
@@ -679,13 +724,17 @@ function renderTemplates() {
     `;
   }).join("");
 
+  stagger(grid, ".tpl-card");
+
   grid.querySelectorAll(".tpl-card").forEach(card => {
     card.addEventListener("click", (e) => {
       if (e.target.closest("[data-del]") || e.target.closest("[data-preview]")) return;
       const name = card.dataset.name;
-      if (state.selected.has(name)) state.selected.delete(name);
-      else state.selected.add(name);
-      renderTemplates();
+      const on = !state.selected.has(name);
+      if (on) state.selected.add(name); else state.selected.delete(name);
+      // Sửa tại chỗ thay vì vẽ lại cả lưới: giữ được hiệu ứng và mượt tay hơn.
+      markTplSelected(card, on);
+      syncTplCount();
     });
   });
 
@@ -707,14 +756,7 @@ function renderTemplates() {
     });
   });
 
-  const tplEl = $("#tpl-count .stat-val") || $("#tpl-count");
-  if (tplEl) tplEl.textContent = `${state.selected.size} / ${state.templates.length} đã chọn`;
-  
-  const allSelected = state.templates.length > 0 && state.selected.size === state.templates.length;
-  const selectAllChk = $("#select-all");
-  if (selectAllChk) selectAllChk.checked = allSelected;
-
-  updateRunMatrix();
+  syncTplCount();
 }
 
 $("#tpl-search")?.addEventListener("input", (e) => {
@@ -728,7 +770,9 @@ $("#select-all")?.addEventListener("change", (e) => {
   } else {
     state.selected.clear();
   }
-  renderTemplates();
+  $("#tpl-grid")?.querySelectorAll(".tpl-card").forEach(card =>
+    markTplSelected(card, state.selected.has(card.dataset.name)));
+  syncTplCount();
 });
 
 $("#clear-templates")?.addEventListener("click", async () => {
@@ -938,6 +982,11 @@ function renderPrompts() {
     return;
   }
 
+  if (!changed("prompt", [state.prompts.map(p => [p.id, p.name, p.text]),
+                          [...state.selectedPrompts]])) {
+    return;
+  }
+
   list.innerHTML = state.prompts.map((p, idx) => {
     const isSelected = state.selectedPrompts.has(p.id);
     return `
@@ -988,6 +1037,8 @@ function renderPrompts() {
       updateRunMatrix();
     });
   });
+
+  stagger(list, ".prompt-card");
 
   list.querySelectorAll("[data-edit]").forEach(btn => {
     btn.addEventListener("click", () => openPromptForm(btn.dataset.edit));
@@ -1439,8 +1490,13 @@ function renderFleetBar(fleet, exhausted) {
 
 // Một thẻ kết quả. Trước đây đoạn HTML này bị chép hai bản (chế độ Collections và
 // chế độ đơn lẻ) nên sửa giao diện phải sửa hai chỗ, và hai chỗ đã lệch nhau.
+// Ảnh nào đã từng hiện rồi thì thôi, chỉ tấm VỪA xong mới chạy hiệu ứng hiện ra.
+const _shownDone = new Set();
+
 function jobCardHTML(j) {
   const isDone = j.status === "done" && j.result_url;
+  const justDone = isDone && !_shownDone.has(j.id);
+  if (isDone) _shownDone.add(j.id);
   const isRunning = j.status === "running";
   const isFailed = j.status === "failed";
   const cls = isDone ? "done" : (isRunning ? "running" : (isFailed ? "failed" : "pending"));
@@ -1455,7 +1511,7 @@ function jobCardHTML(j) {
        </div>`;
 
   return `
-    <div class="job-card ${cls}" ${isFailed && j.error ? `title="${esc(j.error)}"` : ""}>
+    <div class="job-card ${cls}${justDone ? " just-done" : ""}" ${isFailed && j.error ? `title="${esc(j.error)}"` : ""}>
       <div class="job-preview-wrap">
         ${body}
         ${isDone ? `
@@ -1495,6 +1551,12 @@ function renderCollections(cols) {
 
   if (!container) return;
 
+  // Chữ ký gồm mọi thứ nhìn thấy được: đổi một job mới vẽ lại, còn không thì thôi.
+  if (!changed("cols", cols.map(c => [c.id, c.name, c.status, c.done_count,
+        c.total_count, (c.jobs || []).map(j => [j.id, j.status, j.result_url])]))) {
+    return;
+  }
+
   container.innerHTML = cols.map(c => {
     const isDone = c.status === "done";
     const isRunning = c.status === "running";
@@ -1524,6 +1586,7 @@ function renderCollections(cols) {
       </div>
     `;
   }).join("");
+
 }
 
 // Băng cảnh báo: hết lượt tạo ảnh (chặn) + cảnh báo nhẹ (vd: mức suy nghĩ)
@@ -1600,10 +1663,31 @@ function renderResults(jobs) {
   grid.innerHTML = jobs.map(jobCardHTML).join("");
 }
 
+// Xoá kết quả = xoá luôn ẢNH trong designs/. Không xoá file thì lần gen sau
+// skip_done vẫn thấy thư mục có ảnh và bỏ qua, tức là bấm xong vẫn không gen lại
+// được. Vì đụng tới file trên đĩa nên phải hỏi trước.
 $("#btn-clear-jobs")?.addEventListener("click", async () => {
-  await fetch("/api/jobs", { method: "DELETE" });
+  const n = (state.collections || []).reduce((s, c) => s + (c.done_count || 0), 0);
+  if (!confirm(`Xoá kết quả?
+
+`
+             + `${n} ảnh đã gen trong thư mục designs/ cũng bị xoá vĩnh viễn.`)) return;
+
+  try {
+    const res = await fetch("/api/jobs", { method: "DELETE" });
+    const d = await res.json();
+    showToast(d.deleted_files
+      ? `Đã xoá ${d.deleted_files} ảnh và ${d.deleted_folders} thư mục`
+      : "Đã xoá danh sách kết quả", "info");
+  } catch (e) {
+    showToast("Không xoá được kết quả", "error");
+    return;
+  }
+
   state.jobs = [];
   state.collections = [];
+  _shownDone.clear();
+  _sig.cols = null;                 // ép vẽ lại, khỏi bị chốt "dữ liệu không đổi"
   renderResults([]);
   const container = $("#collections-container");
   if (container) container.innerHTML = "";

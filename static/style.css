@@ -2546,6 +2546,141 @@ button.pool-stat-pill:focus-visible {
   to { transform: rotate(360deg); }
 }
 
+/* ==========================================================================
+   CHUYỂN ĐỘNG (v54)
+
+   Mỗi hiệu ứng phải TRẢ LỜI một câu hỏi của người dùng, không thì bỏ:
+     "vừa có gì mới?"      -> ảnh mới gen: hiện lên MỘT LẦN, mờ dần + nhích lên
+     "máy có đang làm gì?" -> việc kéo dài: nhịp chậm, biên độ nhỏ, không chớp
+     "máy nhận cú bấm chưa?" -> phản hồi tức thì dưới ngón tay, < 200ms
+     "cái này ở đâu ra?"   -> lớp nổi trượt ra từ đúng cạnh nó thuộc về
+
+   Không dùng: hiệu ứng chạy lại mỗi lần vẽ lại, nhấp nháy đổi độ sáng, hay
+   chuyển động lặp vô hạn ở giữa vùng nhìn. Chỉ animate `transform`/`opacity`.
+   ========================================================================== */
+
+:root {
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.32, 0.64, 1);
+}
+
+/* ---------- 1. "Có gì mới?" — chỉ chạy MỘT LẦN, cho thứ vừa xuất hiện ------ */
+
+@keyframes rise-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Mở app: khung chính hiện lên một lượt rồi thôi */
+.app-container > .panel,
+.app-container > .main-columns > .panel {
+  animation: rise-in 0.4s var(--ease-out-soft) both;
+}
+
+.main-columns > .panel:nth-child(2) { animation-delay: 0.07s; }
+
+/* Thẻ template / prompt: đổ dây nhẹ. Hai danh sách này chỉ vẽ lại khi thật sự
+   đổi (xem chốt `changed()` trong app.js) nên không bị chạy lại liên tục. */
+.tpl-card,
+.prompt-card,
+.pcard {
+  animation: rise-in 0.3s var(--ease-out-soft) both;
+  animation-delay: calc(var(--i, 0) * 22ms);
+}
+
+/* Ảnh KẾT QUẢ vừa gen xong. Chỉ tấm nào mới xong mới có class này (app.js gán),
+   nên các tấm cũ đứng yên trong lúc tấm mới hiện ra - đó mới là thông tin.
+   Trước đây mọi ảnh cùng nháy lại mỗi lần một job đổi trạng thái: chớp loạn và
+   chẳng nói lên điều gì. */
+@keyframes photo-develop {
+  from { opacity: 0; transform: scale(1.04); filter: blur(6px); }
+  to   { opacity: 1; transform: none; filter: none; }
+}
+
+.job-card.just-done .job-mockup-img {
+  animation: photo-develop 0.5s var(--ease-out-soft) both;
+}
+
+/* Panel Kết quả lộ ra lần đầu */
+#results-panel:not([hidden]) { animation: rise-in 0.36s var(--ease-out-soft) both; }
+
+/* ---------- 2. "Máy đang làm gì?" — chậm, đều, biên độ nhỏ ---------------- */
+
+/* Ô chưa tới lượt: một vệt sáng rất nhạt trôi qua, chu kỳ 3.2s. Chậm và mờ để
+   nhìn cả lưới 12 ô vẫn không mỏi mắt. */
+@keyframes job-wait {
+  from { background-position: 130% 0; }
+  to   { background-position: -30% 0; }
+}
+
+.job-card.pending .job-slot-empty {
+  animation-duration: 3.2s;
+  animation-timing-function: linear;
+}
+
+/* Chấm "đang chạy": nhịp thở, KHÔNG nhấp nháy tắt/bật */
+@keyframes breathe {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.86); }
+}
+
+.runbar-status-pill.running .status-indicator-dot,
+.status-dot.active-logging {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* Thanh tiến độ: trôi mềm tới mốc mới thay vì nhảy giật */
+.progress-fill,
+.batch-subtrack-fill {
+  transition: width 0.5s var(--ease-out-soft);
+}
+
+/* ---------- 3. "Máy nhận cú bấm chưa?" — dưới 200ms, ngay dưới con trỏ ----- */
+
+.tpl-badge-select {
+  transition: transform 0.18s var(--ease-spring), background-color 0.16s ease,
+              color 0.16s ease;
+}
+
+.tpl-card.selected .tpl-badge-select { transform: scale(1.15); }
+
+/* Đang chọn thì đứng yên - hiệu ứng "mới xuất hiện" không còn đúng nữa */
+.tpl-card.selected { animation: none; }
+
+/* ---------- 4. "Cái này ở đâu ra?" — trượt ra từ cạnh nó thuộc về ---------- */
+
+@keyframes slide-in-right {
+  from { opacity: 0; transform: translate3d(24px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+.toast { animation: slide-in-right 0.3s var(--ease-spring) both; }
+
+.side-drawer { animation-timing-function: var(--ease-out-soft); }
+
+/* Menu bung ra từ đúng góc của nút ⋯ */
+.menu-pop {
+  animation: pop-in 0.15s var(--ease-out-soft) both;
+  transform-origin: top right;
+}
+
+/* ---------- 5. Thanh chạy nổi -------------------------------------------- */
+
+/* Thanh này tự căn giữa bằng translateX(-50%). Animate `transform` bằng keyframes
+   dùng chung sẽ GHI ĐÈ mất phần căn giữa đó và thanh lệch hẳn sang phải - phải
+   có keyframes riêng giữ nguyên -50% ở cả hai đầu. */
+@keyframes runbar-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+  to   { opacity: 1; transform: translateX(-50%); }
+}
+
+.runbar { animation: runbar-in 0.42s var(--ease-out-soft) 0.12s both; }
+
 /* --- người dùng tắt hiệu ứng thì tôn trọng --- */
 @media (prefers-reduced-motion: reduce) {
   *,
