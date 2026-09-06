@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 import auth_login
@@ -31,6 +31,7 @@ log = logging.getLogger("chatgpt.server")
 
 ROOT = Path(__file__).resolve().parent
 TEMPLATES = ROOT / "data" / "templates"
+STATIC_DIR = ROOT / "static"
 DESIGNS = ROOT / "designs"
 OUTPUTS = DESIGNS
 LEGACY_OUTPUTS = ROOT / "data" / "outputs"
@@ -1267,6 +1268,50 @@ def delete_profile(name: str):
     return {"ok": True, "dir_removed": removed}
 
 
+@app.delete("/api/profiles")
+def delete_all_profiles():
+    """Xoá TẤT CẢ tài khoản: bỏ khỏi config và xoá luôn thư mục phiên đăng nhập.
+
+    Chặn khi đang gen hoặc đang đăng nhập hàng loạt - xoá thư mục profile lúc
+    Chrome còn giữ nó thì vừa không xoá được, vừa làm hỏng lượt đang chạy."""
+    if RUN.get("active"):
+        raise HTTPException(409, "Đang có lượt gen chạy - dừng trước đã.")
+    if BULK.get("active"):
+        raise HTTPException(409, "Đang đăng nhập hàng loạt - chờ xong đã.")
+
+    names = [p["name"] for p in _get_profiles()]
+    # gom cả thư mục mồ côi (có trong .chrome-profiles nhưng không có trong config)
+    base = _profiles_dir()
+    if base.is_dir():
+        names += [d.name for d in base.iterdir() if d.is_dir() and d.name not in names]
+
+    for name in names:                       # đóng cửa sổ đăng nhập còn mở
+        box = LOGIN.get(name)
+        if box:
+            box["stop"].set()
+            box["thread"].join(timeout=15)
+            LOGIN.pop(name, None)
+
+    _save_profiles([])
+    kept = []
+    for name in names:
+        d = _profile_dir_of(name)
+        if d is None or not _rm_profile_dir(d):
+            kept.append(name)
+            log.warning("Không xoá được thư mục profile: %s", name)
+        LOGIN_STATE.pop(name, None)
+        LAST_LOGIN.pop(name, None)
+    try:                                      # ghi lại file trạng thái đã dọn
+        PROFILE_STATE_FILE.write_text(
+            json.dumps(LOGIN_STATE, ensure_ascii=False, indent=1), encoding="utf-8")
+    except Exception as e:  # noqa: BLE001
+        log.warning("Không ghi được trạng thái đăng nhập: %s", e)
+
+    log.info("Đã xoá %d tài khoản%s.", len(names),
+             f" ({len(kept)} thư mục còn sót: Chrome đang mở?)" if kept else "")
+    return {"ok": True, "removed": len(names), "dirs_kept": kept}
+
+
 # =============================================================== đăng nhập hàng loạt
 BULK = {"active": False, "items": [], "started": 0, "boxes": {}}
 
@@ -1590,6 +1635,26 @@ def serve_output(name: str):
 @app.get("/files/designs/{name:path}")
 def serve_design(name: str):
     return serve_output(name)
+
+
+@app.get("/")
+def index():
+    """Trang chủ, có ĐÓNG DẤU PHIÊN BẢN theo giờ sửa file vào app.js/style.css.
+
+    Trước đây số ?v= phải sửa tay trong index.html, và quên sửa là trình duyệt
+    giữ nguyên bản cũ trong cache: giao diện mới đi kèm code cũ -> bấm nút không
+    ăn, mà nhìn log server thì mọi thứ vẫn 200 OK. Đóng dấu tự động thì không
+    bao giờ gặp lại chuyện đó."""
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+
+    def stamp(m):
+        name = m.group(1)
+        f = STATIC_DIR / name
+        v = int(f.stat().st_mtime) if f.exists() else 0
+        return f'{name}?v={v}'
+
+    html = re.sub(r'(app\.js|style\.css)\?v=\d+', stamp, html)
+    return HTMLResponse(html)
 
 
 app.mount("/", StaticFiles(directory=str(ROOT / "static"), html=True), name="static")

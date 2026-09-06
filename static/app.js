@@ -13,16 +13,13 @@ const state = {
   prompts: [],
   promptId: null,
   selectedPrompts: new Set(),
-  selectedFleetProfiles: new Set(),
   polling: null,
   jobs: [],
   collections: [],
-  stagedQueue: [],
   fleet: {},
   runProfile: null,
   batches: [],
   currentBatchIndex: 0,
-  resumeMode: false,
   isStopped: false,
 };
 
@@ -270,6 +267,42 @@ function toggleAccountsDrawer(show) {
   d.hidden = !open;
   b.hidden = !open;
 }
+
+// Xoá hết tài khoản. Việc này xoá luôn thư mục phiên đăng nhập nên KHÔNG lùi lại
+// được - phải đăng nhập lại từ đầu. Vì vậy hỏi hai lần, lần hai bắt gõ tay.
+$("#btn-clear-profiles")?.addEventListener("click", async (ev) => {
+  const n = state.profiles.length;
+  if (!n) {
+    showToast("Chưa có tài khoản nào để xoá.", "info");
+    return;
+  }
+  if (!confirm(`Xoá TẤT CẢ ${n} tài khoản?
+
+`
+             + `Toàn bộ phiên đăng nhập đã lưu cũng bị xoá, `
+             + `bạn sẽ phải đăng nhập lại từ đầu.`)) return;
+  if ((prompt('Chắc chắn thì gõ "XOA" rồi bấm OK:') || "").trim().toUpperCase() !== "XOA") {
+    showToast("Đã huỷ.", "info");
+    return;
+  }
+
+  const btn = ev.currentTarget;
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/profiles", { method: "DELETE" });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "xoá thất bại");
+    const kept = (d.dirs_kept || []).length;
+    showToast(kept
+      ? `Đã xoá ${d.removed} tài khoản, còn ${kept} thư mục chưa xoá được (Chrome đang mở?)`
+      : `Đã xoá ${d.removed} tài khoản`, kept ? "error" : "success");
+  } catch (e) {
+    showToast(`Không xoá được: ${e.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    loadProfiles();
+  }
+});
 
 $("#open-accounts")?.addEventListener("click", () => toggleAccountsDrawer());
 $("#btn-close-accounts")?.addEventListener("click", () => toggleAccountsDrawer(false));
@@ -1034,264 +1067,43 @@ promptForm?.addEventListener("submit", async (e) => {
 
 
 // ==========================================================================
-// 3. Queue Drawer & Staging Logic
-// ==========================================================================
-
-function renderStagedQueue() {
-  const queueCount = state.stagedQueue.length;
-  const badgeRunbar = $("#runbar-queue-badge");
-  const badgeDrawer = $("#queue-count-badge");
-  const body = $("#queue-drawer-body");
-  const summary = $("#queue-summary-text");
-  const startBtn = $("#btn-start-queue");
-
-  if (badgeRunbar) badgeRunbar.textContent = queueCount;
-  if (badgeDrawer) badgeDrawer.textContent = queueCount;
-
-  let totalMockups = 0;
-  state.stagedQueue.forEach(c => {
-    totalMockups += (c.templates || []).length;
-  });
-
-  if (summary) {
-    summary.textContent = queueCount === 0
-      ? "Chưa có Collection nào trong hàng đợi"
-      : `${queueCount} Collections · ${totalMockups} ảnh mockup`;
-  }
-
-  if (startBtn) {
-    startBtn.disabled = (queueCount === 0);
-  }
-
-  if (!body) return;
-
-  if (queueCount === 0) {
-    body.innerHTML = `
-      <div class="queue-empty-box">
-        <div style="font-size: 1.4rem; margin-bottom: 6px;">📥</div>
-        <div><b>Hàng đợi hiện đang trống</b></div>
-        <div style="font-size: 0.78rem; color: var(--muted); margin-top: 4px;">
-          Hãy chọn ảnh template và prompt trên giao diện rồi bấm <b>"+ Thêm vào hàng đợi"</b> để xếp vào đây.
-        </div>
-      </div>
-    `;
-    return;
-  }
-
-  body.innerHTML = state.stagedQueue.map((item, idx) => {
-    const tCount = (item.templates || []).length;
-    return `
-      <div class="staged-card" data-idx="${idx}">
-        <div class="staged-left">
-          <span class="staged-index">#${idx + 1}</span>
-          <div class="staged-info">
-            <div class="staged-name">📁 ${esc(item.prompt_name || item.name || "Collection")}</div>
-            <div class="staged-meta">
-              <b>${tCount}</b> templates (${esc((item.templates || []).slice(0, 3).join(", "))}${tCount > 3 ? ` +${tCount - 3}` : ""})
-            </div>
-          </div>
-        </div>
-        <button type="button" class="staged-del-btn" data-del-staged="${idx}" title="Xoá Collection này khỏi hàng đợi">✕</button>
-      </div>
-    `;
-  }).join("");
-
-  body.querySelectorAll("[data-del-staged]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const idx = parseInt(btn.dataset.delStaged);
-      state.stagedQueue.splice(idx, 1);
-      renderStagedQueue();
-      updateRunMatrix();
-      showToast("Đã xoá Collection khỏi hàng đợi", "info");
-    });
-  });
-}
-
-function toggleQueueDrawer(forceState) {
-  const drawer = $("#queue-drawer");
-  const backdrop = $("#queue-drawer-backdrop");
-  if (!drawer) return;
-
-  const isHidden = drawer.hidden;
-  const nextHidden = (typeof forceState === "boolean") ? !forceState : !isHidden;
-
-  drawer.hidden = nextHidden;
-  if (backdrop) backdrop.hidden = nextHidden;
-}
-
-$("#btn-toggle-queue")?.addEventListener("click", () => toggleQueueDrawer());
-$("#btn-close-drawer")?.addEventListener("click", () => toggleQueueDrawer(false));
-$("#queue-drawer-backdrop")?.addEventListener("click", () => toggleQueueDrawer(false));
-
-$("#btn-clear-staging")?.addEventListener("click", () => {
-  if (state.stagedQueue.length === 0) return;
-  state.stagedQueue = [];
-  renderStagedQueue();
-  updateRunMatrix();
-  showToast("Đã dọn sạch hàng đợi chờ", "info");
-});
-
-// Thêm bộ template + prompt hiện tại vào hàng đợi
-async function addCurrentToQueue() {
-  const tplCount = state.selected.size;
-  const promptCount = state.selectedPrompts.size;
-
-  if (tplCount === 0) {
-    showToast("Vui lòng chọn ít nhất 1 ảnh template!", "error");
-    return;
-  }
-  if (promptCount === 0) {
-    showToast("Vui lòng chọn ít nhất 1 prompt!", "error");
-    return;
-  }
-
-  const isRunning = !!state.polling;
-
-  // Nếu hệ thống ĐANG CHẠY: gửi trực tiếp vào active worker pool!
-  if (isRunning) {
-    const colsToAdd = [];
-    for (const pid of state.selectedPrompts) {
-      const p = state.prompts.find(x => x.id === pid);
-      if (!p) continue;
-      colsToAdd.push({
-        name: p.name,
-        prompt: p.text,
-        prompt_name: p.name,
-        templates: [...state.selected]
-      });
-    }
-
-    try {
-      const res = await fetch("/api/collections/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collections: colsToAdd })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        showToast(err.detail || "Lỗi nối hàng đợi", "error");
-        return;
-      }
-
-      const d = await res.json();
-      showToast(`⚡ Đã nối ${d.started_collections} Collection vào hàng đợi đang gen!`, "success");
-      
-      const resPanel = $("#results-panel");
-      if (resPanel) {
-        resPanel.hidden = false;
-        resPanel.scrollIntoView({ behavior: "smooth" });
-      }
-    } catch (err) {
-      showToast("Lỗi kết nối", "error");
-    }
-    return;
-  }
-
-  // Nếu hệ thống CHƯA CHẠY: đóng gói vào state.stagedQueue
-  let added = 0;
-  for (const pid of state.selectedPrompts) {
-    const p = state.prompts.find(x => x.id === pid);
-    if (!p) continue;
-    state.stagedQueue.push({
-      id: "stg_" + Math.random().toString(36).substring(2, 9),
-      name: p.name,
-      prompt_id: p.id,
-      prompt: p.text,
-      prompt_name: p.name,
-      templates: [...state.selected]
-    });
-    added++;
-  }
-
-  renderStagedQueue();
-  updateRunMatrix();
-  showToast(`Đã thêm ${added} Collection vào Hàng Đợi (${state.stagedQueue.length} bộ đang chờ)`, "success");
-}
-
-$("#btn-add-queue")?.addEventListener("click", addCurrentToQueue);
-$("#btn-start-queue")?.addEventListener("click", () => {
-  toggleQueueDrawer(false);
-  openAccModal();
-});
-
-// ==========================================================================
 // 4. Run Bar State & Modal
 // ==========================================================================
 
 function updateRunMatrix() {
   const tplCount = state.selected.size;
   const promptCount = state.selectedPrompts.size;
-  const queueCount = state.stagedQueue.length;
 
   const statusPill = $("#runbar-status-pill");
   const statusState = $("#runbar-status-state");
   const mainMsg = $("#runbar-main-msg");
   const runBtn = $("#run-btn");
   const runBtnText = $("#run-btn-text");
-  const addQueueBtn = $("#btn-add-queue");
   const isRunning = !!state.polling;
 
   const stopBtn = $("#btn-emergency-stop");
   const stopResultsBtn = $("#btn-stop-results");
-  if (isRunning) {
-    if (stopBtn) stopBtn.hidden = false;
-    if (stopResultsBtn) stopResultsBtn.hidden = false;
-  } else {
-    if (stopBtn) stopBtn.hidden = true;
-    if (stopResultsBtn) stopResultsBtn.hidden = true;
-  }
+  if (stopBtn) stopBtn.hidden = !isRunning;
+  if (stopResultsBtn) stopResultsBtn.hidden = !isRunning;
 
   const canAdd = (tplCount > 0 && promptCount > 0);
-  if (addQueueBtn) addQueueBtn.disabled = !canAdd;
 
   if (isRunning) {
     if (statusPill && statusState) {
       statusPill.className = "runbar-status-pill running";
       statusState.textContent = "Đang chạy";
     }
-
-    if (addQueueBtn) {
-      addQueueBtn.classList.add("is-enqueue");
-      addQueueBtn.innerHTML = `<span>+ Nối hàng đợi</span>`;
-    }
+    // Đang chạy thì không nhận việc mới: chờ lượt này xong, hoặc Dừng khẩn cấp.
     if (runBtn) {
       runBtn.disabled = true;
-      runBtn.classList.remove("is-enqueue");
     }
     if (runBtnText) runBtnText.textContent = "Đang gen...";
-
-    if (canAdd) {
-      if (mainMsg) mainMsg.innerHTML = `Đã chọn: <b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt (bấm + Nối hàng đợi)`;
-    } else {
-      if (mainMsg) mainMsg.innerHTML = `ChatGPT đang sinh mockup... Bạn có thể bấm <b>Dừng khẩn cấp</b> bất cứ lúc nào`;
-    }
+    // Không viết câu hướng dẫn nào ở đây: nút "Dừng khẩn cấp" đứng ngay cạnh,
+    // tự nó đã nói đủ. Để trống cho thanh co lại vừa đúng nội dung.
+    if (mainMsg) mainMsg.textContent = "";
     return;
   }
 
-  if (addQueueBtn) {
-    addQueueBtn.classList.remove("is-enqueue");
-    addQueueBtn.innerHTML = `<span>+ Thêm hàng đợi</span>`;
-  }
-  if (runBtn) runBtn.classList.remove("is-enqueue");
-
-  if (queueCount > 0) {
-    if (statusPill && statusState) {
-      statusPill.className = "runbar-status-pill selected";
-      statusState.textContent = `${queueCount} bộ chờ`;
-    }
-    if (runBtn) runBtn.disabled = false;
-    if (runBtnText) runBtnText.textContent = `▶ Chạy ${queueCount} bộ`;
-    if (canAdd) {
-      if (mainMsg) mainMsg.innerHTML = `Đã chọn thêm: <b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt`;
-    } else {
-      if (mainMsg) mainMsg.innerHTML = `Sẵn sàng chạy <b>${queueCount}</b> Collection trong hàng đợi`;
-    }
-    return;
-  }
-
-  // queueCount === 0
   if (!canAdd) {
     if (statusPill && statusState) {
       statusPill.className = "runbar-status-pill";
@@ -1322,323 +1134,104 @@ function updateRunMatrix() {
   }
 }
 
-// ---- Chọn tài khoản rồi mới gen -------------------------------------------
-function openAccModal(isResume = false, remainingCount = 0) {
-  const box = $("#acc-modal-list");
-  const title = $("#acc-modal-title");
-  const note = $("#acc-modal-note");
-  const goBtn = $("#acc-modal-go");
-  if (!box) return;
+// ---- Chạy gen ---------------------------------------------------------------
+// Mặc định chạy trên TẤT CẢ tài khoản, không hỏi han gì. Trước đây phải qua một
+// hộp thoại chọn tài khoản, mà lần nào cũng chọn hết nên chỉ tổ thêm một cú click.
 
-  if (state.profiles.length === 0) {
+function allProfileNames() {
+  // Ưu tiên tài khoản đã có thư mục phiên; không có cái nào thì lấy tất cho pool
+  // tự báo lỗi cụ thể, hơn là ở đây im lặng không chạy.
+  const ready = state.profiles.filter(p => p.exists).map(p => p.name);
+  return ready.length ? ready : state.profiles.map(p => p.name);
+}
+
+// Luôn bỏ qua thư mục đã có ảnh. Trước đây là ô tích trên thanh chạy, nhưng
+// không có lý do gì để tắt: muốn gen lại một bộ thì xoá thư mục của nó, còn để
+// tắt cả lượt thì mọi bộ đã xong đều bị làm lại từ đầu - tốn lượt vô ích.
+function skipDone() {
+  return true;
+}
+
+function showResultsPanel() {
+  const resPanel = $("#results-panel");
+  if (resPanel) {
+    resPanel.hidden = false;
+    resPanel.scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+async function startGenerate() {
+  if (state.selected.size === 0 || state.selectedPrompts.size === 0) return;
+  const profiles = allProfileNames();
+  if (profiles.length === 0) {
     showToast("Chưa có tài khoản nào. Thêm tài khoản trước đã.", "error");
     return;
   }
 
-  state.resumeMode = Boolean(isResume);
+  state.isStopped = false;
+  const payload = {
+    profiles,
+    templates: [...state.selected],
+    prompt_ids: [...state.selectedPrompts],
+    count: 1,
+    skip_done: skipDone()
+  };
 
-  const queueCount = state.stagedQueue.length;
-  const promptCount = Math.max(1, state.selectedPrompts.size);
-  const totalCollections = queueCount > 0 ? queueCount : promptCount;
-  const isBulk = totalCollections > 1 || isResume;
-
-  if (isResume) {
-    if (title) title.textContent = `Chạy tiếp ${remainingCount} bộ chưa hoàn thành`;
-    if (note) note.innerHTML = `Hệ thống sẽ chạy tiếp <b>${remainingCount} Collections</b> còn thiếu, tự động bỏ qua các ảnh đã có trên đĩa.`;
-    if (goBtn) goBtn.textContent = `Bắt đầu chạy tiếp (${remainingCount} bộ)`;
-  } else if (queueCount > 0) {
-    if (title) title.textContent = `Chọn tài khoản chạy (${queueCount} Collections)`;
-    if (note) note.innerHTML = `Hệ thống sẽ chạy <b>${queueCount} Collections</b> trong hàng đợi song song qua các tài khoản được chọn.`;
-    if (goBtn) goBtn.textContent = `Bắt đầu chạy ${queueCount} Collections`;
-  } else if (!isBulk) {
-    // Single mode: 1 Collection duy nhất
-    if (title) title.textContent = "Chọn tài khoản để gen";
-    if (note) note.innerHTML = "Cả lượt gen chạy trên <b>1 tài khoản, trong 1 phiên chat</b> để bộ mockup đồng nhất design.";
-    if (goBtn) goBtn.textContent = "Bắt đầu gen (1 Collection)";
-
-    const last = localStorage.getItem("genProfile");
-    const names = state.profiles.map(p => p.name);
-    state.genProfile = names.includes(last) ? last : names[0];
-
-    box.innerHTML = state.profiles.map(p => {
-      const ready = p.exists && !p.login_open;
-      return `
-        <label class="acc-pick ${p.name === state.genProfile ? "selected" : ""}" data-acc="${esc(p.name)}">
-          <input type="radio" name="acc-pick" value="${esc(p.name)}" ${p.name === state.genProfile ? "checked" : ""}>
-          <span class="acc-pick-name">${esc(p.name)}</span>
-          <span class="acc-pick-state ${ready ? "ok" : "warn"}">
-            ${p.login_open ? "Đang mở Chrome" : (ready ? "Đã đăng nhập" : "Chưa kết nối")}
-          </span>
-        </label>`;
-    }).join("");
-
-    box.querySelectorAll(".acc-pick").forEach(el => {
-      el.addEventListener("click", () => {
-        state.genProfile = el.dataset.acc;
-        box.querySelectorAll(".acc-pick").forEach(x => x.classList.remove("selected"));
-        el.classList.add("selected");
-        el.querySelector("input").checked = true;
-      });
+  try {
+    const res = await fetch("/api/collections/generate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
     });
-    $("#acc-modal").hidden = false;
-    return;
-  } else {
-    // Bulk Collections mode
-    if (title) title.textContent = `Chọn đội tài khoản (${totalCollections} Collections)`;
-    if (note) note.innerHTML = `Hệ thống sẽ tạo <b>${totalCollections} Collections</b> song song qua các tài khoản được chọn.`;
-    if (goBtn) goBtn.textContent = `Bắt đầu tạo ${totalCollections} Collections (${state.selectedFleetProfiles.size || state.profiles.length} tài khoản)`;
-  }
-
-  if (state.selectedFleetProfiles.size === 0) {
-    state.profiles.forEach(p => {
-      if (p.exists) state.selectedFleetProfiles.add(p.name);
-    });
-  }
-
-  const allChecked = state.profiles.length > 0 && state.profiles.every(p => state.selectedFleetProfiles.has(p.name));
-
-  let html = `
-    <label class="acc-pick ${allChecked ? "selected" : ""}" id="fleet-select-all" style="border-style:dashed;">
-      <input type="checkbox" ${allChecked ? "checked" : ""}>
-      <span class="acc-pick-name">Chọn tất cả tài khoản</span>
-      <span class="acc-pick-state ok">${state.selectedFleetProfiles.size}/${state.profiles.length}</span>
-    </label>
-    <hr class="notice-sep">
-  `;
-
-  html += state.profiles.map(p => {
-    const ready = p.exists && !p.login_open;
-    const isChecked = state.selectedFleetProfiles.has(p.name);
-    return `
-      <label class="acc-pick ${isChecked ? "selected" : ""}" data-fleet-acc="${esc(p.name)}">
-        <input type="checkbox" value="${esc(p.name)}" ${isChecked ? "checked" : ""}>
-        <span class="acc-pick-name">${esc(p.name)}</span>
-        <span class="acc-pick-state ${ready ? "ok" : "warn"}">
-          ${p.login_open ? "Đang mở Chrome" : (ready ? "Sẵn sàng" : "Chưa kết nối")}
-        </span>
-      </label>`;
-  }).join("");
-
-  box.innerHTML = html;
-
-  const selectAllEl = box.querySelector("#fleet-select-all");
-  selectAllEl?.addEventListener("click", (e) => {
-    e.preventDefault();
-    const nextCheck = state.selectedFleetProfiles.size !== state.profiles.length;
-    if (nextCheck) {
-      state.profiles.forEach(p => state.selectedFleetProfiles.add(p.name));
-    } else {
-      state.selectedFleetProfiles.clear();
+    const d = await res.json();
+    if (!res.ok) {
+      showToast(d.detail || "Lỗi tạo mockup", "error");
+      return;
     }
-    openAccModal();
-  });
+    const skipMsg = d.skipped_jobs
+      ? ` (bỏ qua ${d.skipped_jobs} ảnh đã có${d.skipped_collections ? `, ${d.skipped_collections} bộ trọn vẹn` : ""})`
+      : "";
+    showToast(`Bắt đầu ${d.started_collections} bộ trên ${d.profiles.length} tài khoản${skipMsg}`, "success");
+    showResultsPanel();
+    startPolling();
+  } catch (err) {
+    showToast("Lỗi kết nối", "error");
+  }
+}
 
-  box.querySelectorAll("[data-fleet-acc]").forEach(el => {
-    el.addEventListener("click", (e) => {
-      e.preventDefault();
-      const acc = el.dataset.fleetAcc;
-      if (state.selectedFleetProfiles.has(acc)) {
-        state.selectedFleetProfiles.delete(acc);
-      } else {
-        state.selectedFleetProfiles.add(acc);
-      }
-      openAccModal();
+async function resumeGenerate(remaining) {
+  const profiles = allProfileNames();
+  if (profiles.length === 0) {
+    showToast("Chưa có tài khoản nào. Thêm tài khoản trước đã.", "error");
+    return;
+  }
+  state.isStopped = false;
+  try {
+    const res = await fetch("/api/collections/resume", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ profiles })
     });
-  });
-
-  $("#acc-modal").hidden = false;
+    const d = await res.json();
+    if (!res.ok) {
+      showToast(d.detail || "Không chạy tiếp được", "error");
+      return;
+    }
+    if (d.resumed === 0) {                 // không còn gì để làm
+      showToast(d.message || "Tất cả đã hoàn tất.", "success");
+      return;
+    }
+    showToast(`Chạy tiếp ${d.started_collections ?? remaining} bộ còn lại`, "success");
+    showResultsPanel();
+    startPolling();
+  } catch (err) {
+    showToast("Lỗi kết nối khi chạy tiếp", "error");
+  }
 }
-
-function closeAccModal() {
-  const m = $("#acc-modal");
-  if (m) m.hidden = true;
-}
-
-$("#acc-modal-close")?.addEventListener("click", closeAccModal);
-$("#acc-modal-cancel")?.addEventListener("click", closeAccModal);
-$("#acc-modal .acc-modal-backdrop")?.addEventListener("click", closeAccModal);
 
 $("#run-btn")?.addEventListener("click", () => {
-  const queueCount = state.stagedQueue.length;
-  if (queueCount === 0 && (state.selected.size === 0 || state.selectedPrompts.size === 0)) return;
-  openAccModal();
-});
-
-$("#acc-modal-go")?.addEventListener("click", async () => {
-  if (state.resumeMode) {
-    const profiles = [...state.selectedFleetProfiles];
-    if (profiles.length === 0) {
-      showToast("Cần chọn ít nhất 1 tài khoản tham gia!", "error");
-      return;
-    }
-    closeAccModal();
-    state.resumeMode = false;
-    state.isStopped = false;
-
-    try {
-      const res = await fetch("/api/collections/resume", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ profiles: profiles })
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        showToast(err.detail || "Lỗi khi chạy tiếp các bộ", "error");
-        return;
-      }
-
-      const d = await res.json();
-      showToast(`▶ Bắt đầu chạy tiếp ${d.started_collections || d.resumed || 0} bộ còn lại!`, "success");
-
-      const resPanel = $("#results-panel");
-      if (resPanel) {
-        resPanel.hidden = false;
-        resPanel.scrollIntoView({ behavior: "smooth" });
-      }
-
-      startPolling();
-    } catch (err) {
-      showToast("Lỗi kết nối khi chạy tiếp", "error");
-    }
-    return;
-  }
-
-  const queueCount = state.stagedQueue.length;
-  const isDirect = (queueCount === 0);
-
-  if (isDirect && (state.selected.size === 0 || state.selectedPrompts.size === 0)) return;
-
-  const promptCount = Math.max(1, state.selectedPrompts.size);
-  const isBulk = queueCount > 1 || (isDirect && promptCount > 1);
-
-  if (queueCount > 0) {
-    const profiles = [...state.selectedFleetProfiles];
-    closeAccModal();
-    state.isStopped = false;
-
-    const payload = {
-      profiles: profiles.length ? profiles : state.profiles.map(p => p.name),
-      collections: state.stagedQueue,
-      skip_done: $("#skip-done")?.checked !== false
-    };
-
-    try {
-      const res = await fetch("/api/collections/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        showToast(err.detail || "Lỗi chạy hàng đợi", "error");
-        return;
-      }
-
-      const d = await res.json();
-      state.stagedQueue = [];
-      renderStagedQueue();
-      updateRunMatrix();
-      showToast(`Bắt đầu chạy ${d.started_collections} Collections trên ${d.profiles.length} tài khoản!`, "success");
-
-      const resPanel = $("#results-panel");
-      if (resPanel) {
-        resPanel.hidden = false;
-        resPanel.scrollIntoView({ behavior: "smooth" });
-      }
-
-      startPolling();
-    } catch (err) {
-      showToast("Lỗi kết nối", "error");
-    }
-  } else if (!isBulk) {
-    // Direct single
-    if (!state.genProfile) return;
-    localStorage.setItem("genProfile", state.genProfile);
-    closeAccModal();
-    state.isStopped = false;
-
-    const payload = {
-      templates: [...state.selected],
-      prompt_id: [...state.selectedPrompts][0],
-      profile: state.genProfile
-    };
-
-    try {
-      const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        showToast(err.detail || "Lỗi tạo mockup", "error");
-        return;
-      }
-
-      const d = await res.json();
-      showToast(`Bắt đầu tạo ${d.started} mockup trên "${d.profile}"`, "success");
-
-      const resPanel = $("#results-panel");
-      if (resPanel) {
-        resPanel.hidden = false;
-        resPanel.scrollIntoView({ behavior: "smooth" });
-      }
-
-      startPolling();
-    } catch (err) {
-      showToast("Lỗi kết nối", "error");
-    }
-  } else {
-    // Direct bulk
-    const profiles = [...state.selectedFleetProfiles];
-    if (profiles.length === 0) {
-      showToast("Cần chọn ít nhất 1 tài khoản tham gia!", "error");
-      return;
-    }
-    closeAccModal();
-    state.isStopped = false;
-
-    const payload = {
-      profiles: profiles,
-      templates: [...state.selected],
-      prompt_ids: [...state.selectedPrompts],
-      count: 1,
-      skip_done: $("#skip-done")?.checked !== false
-    };
-
-    try {
-      const res = await fetch("/api/collections/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        showToast(err.detail || "Lỗi tạo chiến dịch", "error");
-        return;
-      }
-
-      const d = await res.json();
-      const skipMsg = d.skipped_jobs
-        ? ` (bỏ qua ${d.skipped_jobs} ảnh đã có${d.skipped_collections ? `, ${d.skipped_collections} bộ trọn vẹn` : ""})`
-        : "";
-      showToast(`Bắt đầu: ${d.started_collections} collection trên ${d.profiles.length} tài khoản${skipMsg}`, "success");
-
-      const resPanel = $("#results-panel");
-      if (resPanel) {
-        resPanel.hidden = false;
-        resPanel.scrollIntoView({ behavior: "smooth" });
-      }
-
-      startPolling();
-    } catch (err) {
-      showToast("Lỗi kết nối", "error");
-    }
-  }
+  if (state.polling) return;        // đang chạy thì thôi, chờ xong đã
+  startGenerate();
 });
 
 function updateBatchMonitor(isRunning) {
@@ -2094,9 +1687,8 @@ async function init() {
   $("#btn-stop-results")?.addEventListener("click", triggerEmergencyStop);
   $("#btn-resume-batch")?.addEventListener("click", () => {
     const cols = state.collections || [];
-    const done = cols.filter(c => c.status === "done" || (c.done_count && c.done_count >= c.total_count)).length;
-    const remaining = cols.length - done;
-    openAccModal(true, remaining);
+    const remaining = cols.filter(c => c.status !== "done").length;
+    resumeGenerate(remaining);
   });
 }
 
