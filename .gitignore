@@ -1,6 +1,5 @@
 .chrome-profiles/
 .chrome-profile*/
-data/templates/
 data/outputs/
 data/state.json
 __pycache__/
