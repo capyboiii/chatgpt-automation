@@ -18,7 +18,7 @@ import uuid
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, HTTPException, UploadFile
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -75,47 +75,111 @@ RUN = {
 # =============================================================== templates
 IMG_EXT = {".png", ".jpg", ".jpeg", ".webp"}
 
+# Ảnh không thuộc thư mục con nào thì gom vào nhóm này
+DEFAULT_GROUP = "Ảnh lẻ"
+
+
+def _safe_group(name: str) -> str:
+    """Tên thư mục con an toàn: bỏ ký tự cấm, không cho thoát ra ngoài."""
+    cleaned = re.sub(r'[\/*?:"<>|]', "", str(name or "")).strip().strip(". ")
+    return cleaned[:60] or DEFAULT_GROUP
+
 
 @app.post("/api/templates/upload")
-async def upload_templates(files: list[UploadFile]):
+async def upload_templates(files: list[UploadFile],
+                           paths: list[str] = Form(default=[])):
+    """Nhận ảnh template, XẾP THEO FOLDER CON.
+
+    Người dùng chọn cả một thư mục cha chứa nhiều thư mục con, mỗi thư mục con là
+    một bộ mockup (cốc, áo, túi, ly của cùng một dòng sản phẩm). Trình duyệt gửi
+    kèm `paths` = webkitRelativePath của từng file, ta lấy tên thư mục NGAY TRÊN
+    file làm tên nhóm.
+
+    Kéo thả ảnh lẻ (không có đường dẫn) thì rơi vào nhóm mặc định.
+    """
     saved = []
-    for f in files:
+    for i, f in enumerate(files):
         ext = Path(f.filename or "").suffix.lower()
         if ext not in IMG_EXT:
             continue
+        rel = paths[i] if i < len(paths) else ""
+        parts = [x for x in str(rel).replace("\\", "/").split("/") if x and x != ".."]
+        group = _safe_group(parts[-2]) if len(parts) >= 2 else DEFAULT_GROUP
+        d = TEMPLATES / group
+        d.mkdir(parents=True, exist_ok=True)
         name = f"{Path(f.filename).stem}-{uuid.uuid4().hex[:6]}{ext}"
-        (TEMPLATES / name).write_bytes(await f.read())
-        saved.append(name)
+        (d / name).write_bytes(await f.read())
+        saved.append(f"{group}/{name}")
     return {"saved": saved}
 
 
 @app.get("/api/templates")
 def list_templates():
-    items = []
+    """Danh sách NHÓM template (mỗi thư mục con là một nhóm).
+
+    Ảnh nằm thẳng trong data/templates/ (từ các bản trước, hoặc kéo thả lẻ) được
+    gom vào nhóm mặc định để giao diện chỉ phải hiểu đúng một khái niệm."""
+    groups: dict[str, list[dict]] = {}
+
+    def add(group: str, p: Path):
+        rel = f"{group}/{p.name}" if group != DEFAULT_GROUP or p.parent != TEMPLATES \
+              else p.name
+        groups.setdefault(group, []).append({
+            "name": p.name,
+            "rel": rel,
+            "url": f"/files/templates/{rel}",
+            "size_kb": round(p.stat().st_size / 1024, 1),
+        })
+
     for p in sorted(TEMPLATES.iterdir()):
-        if p.suffix.lower() in IMG_EXT:
-            items.append({"name": p.name,
-                          "url": f"/files/templates/{p.name}",
-                          "size_kb": round(p.stat().st_size / 1024, 1)})
-    return {"items": items}
+        if p.is_dir():
+            for f in sorted(p.iterdir()):
+                if f.is_file() and f.suffix.lower() in IMG_EXT:
+                    add(p.name, f)
+        elif p.suffix.lower() in IMG_EXT:
+            add(DEFAULT_GROUP, p)
+
+    out = [{"name": g, "count": len(v), "items": v}
+           for g, v in sorted(groups.items()) if v]
+    # Phẳng hoá cho mấy chỗ chỉ cần biết "có bao nhiêu ảnh"
+    flat = [it for g in out for it in g["items"]]
+    return {"groups": out, "items": flat}
 
 
 @app.delete("/api/templates")
 def delete_all_templates():
+    import shutil
     n = 0
-    for p in TEMPLATES.iterdir():
-        if p.suffix.lower() in IMG_EXT:
+    for p in list(TEMPLATES.iterdir()):
+        if p.is_dir():
+            n += sum(1 for f in p.rglob("*") if f.suffix.lower() in IMG_EXT)
+            shutil.rmtree(p, ignore_errors=True)
+        elif p.suffix.lower() in IMG_EXT:
             p.unlink()
             n += 1
     return {"ok": True, "deleted": n}
 
 
-@app.delete("/api/templates/{name}")
-def delete_template(name: str):
-    p = TEMPLATES / name
-    if p.exists() and p.suffix.lower() in IMG_EXT:
-        p.unlink()
-    return {"ok": True}
+@app.delete("/api/templates/group/{group}")
+def delete_template_group(group: str):
+    """Xoá trọn một nhóm (thư mục con)."""
+    import shutil
+    g = _safe_group(group)
+    if g == DEFAULT_GROUP:
+        n = 0
+        for f in list(TEMPLATES.iterdir()):
+            if f.is_file() and f.suffix.lower() in IMG_EXT:
+                f.unlink()
+                n += 1
+        return {"ok": True, "deleted": n}
+    d = (TEMPLATES / g).resolve()
+    try:
+        d.relative_to(TEMPLATES.resolve())
+    except ValueError:
+        raise HTTPException(400, "Tên nhóm không hợp lệ")
+    n = sum(1 for f in d.rglob("*") if f.suffix.lower() in IMG_EXT) if d.is_dir() else 0
+    shutil.rmtree(d, ignore_errors=True)
+    return {"ok": True, "deleted": n}
 
 
 # =============================================================== prompts
@@ -618,7 +682,10 @@ async def generate_collections(payload: dict):
                 job = {
                     "id": jid,
                     "template": str(tp),
-                    "template_name": tname,
+                    # CHỈ tên file, không kèm thư mục cha: đây là chuỗi hiện trên thẻ
+                    # kết quả, mà thư mục cha thì bộ nào cũng như bộ nào nên chỉ tổ
+                    # đẩy phần phân biệt được ra ngoài chỗ bị cắt.
+                    "template_name": Path(tname).name,
                     "template_url": f"/files/templates/{tname}",
                     "prompt": c_prompt,
                     "prompt_name": c_pname,
@@ -676,7 +743,10 @@ async def generate_collections(payload: dict):
                     job = {
                         "id": jid,
                         "template": str(tp),
-                        "template_name": tname,
+                        # CHỈ tên file, không kèm thư mục cha: đây là chuỗi hiện trên thẻ
+                        # kết quả, mà thư mục cha thì bộ nào cũng như bộ nào nên chỉ tổ
+                        # đẩy phần phân biệt được ra ngoài chỗ bị cắt.
+                        "template_name": Path(tname).name,
                         "template_url": f"/files/templates/{tname}",
                         "prompt": p_obj["text"],
                         "prompt_name": p_obj["name"],
@@ -799,7 +869,16 @@ async def resume_collections(payload: dict):
                     j["status"] = "pending"
                     j["error"] = None
                     j["worker"] = None
-            t_names = [j["template_name"] for j in c_jobs]
+            # Đường dẫn TƯƠNG ĐỐI so với data/templates (có thư mục bộ), lấy từ
+            # `template` chứ không phải `template_name` - cái sau chỉ là tên file
+            # để hiển thị, dùng nó ở đây là không tìm thấy file khi chạy tiếp.
+            t_names = []
+            for j in c_jobs:
+                try:
+                    t_names.append(str(Path(j["template"]).resolve()
+                                       .relative_to(TEMPLATES.resolve())).replace("\\", "/"))
+                except Exception:  # noqa: BLE001 - job cũ lưu đường dẫn khác
+                    t_names.append(j.get("template_name", ""))
             incomplete_cols.append({
                 "id": c["id"],
                 "name": c["name"],
@@ -1660,10 +1739,15 @@ def get_config():
 
 
 # =============================================================== static / files
-@app.get("/files/templates/{name}")
+@app.get("/files/templates/{name:path}")
 def serve_template(name: str):
-    p = TEMPLATES / name
-    if not p.exists():
+    # `name` giờ có thể là "<nhóm>/<file>" nên phải chặn thoát thư mục
+    p = (TEMPLATES / name).resolve()
+    try:
+        p.relative_to(TEMPLATES.resolve())
+    except ValueError:
+        raise HTTPException(404)
+    if not p.is_file():
         raise HTTPException(404)
     return FileResponse(str(p))
 

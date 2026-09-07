@@ -8,7 +8,9 @@ const $$ = (s) => document.querySelectorAll(s);
 const state = {
   profiles: [],
   templates: [],
-  selected: new Set(),
+  groups: [],
+  selectedGroup: null,   // tên bộ đang chọn (mỗi lượt gen đúng 1 bộ)
+  pickedItems: new Set(),// ảnh đang tích TRONG bộ đó (mặc định là tất cả)
   filterQuery: "",
   prompts: [],
   promptId: null,
@@ -620,18 +622,6 @@ $("#lm-go")?.addEventListener("click", async () => {
 // 1. Templates & Upload Center
 // ==========================================================================
 
-async function loadTemplates() {
-  try {
-    const res = await fetch("/api/templates");
-    const d = await res.json();
-    state.templates = d.items || [];
-    state.selected = new Set([...state.selected].filter(n => state.templates.some(t => t.name === n)));
-    renderTemplates();
-  } catch (err) {
-    console.error("Lỗi load templates:", err);
-  }
-}
-
 // Poll 2.2s/lần mà lần nào cũng dựng lại innerHTML thì hiệu ứng vào-màn-hình
 // chớp lại liên tục, hover mất, cú click đang dở bị hụt. Chỉ vẽ khi dữ liệu THẬT
 // SỰ đổi; những thay đổi nhỏ (chọn/bỏ chọn) thì sửa tại chỗ, không vẽ lại.
@@ -650,109 +640,199 @@ function stagger(root, sel) {
   });
 }
 
-function syncTplCount() {
-  const el = $("#tpl-count .stat-val") || $("#tpl-count");
-  if (el) el.textContent = `${state.selected.size} / ${state.templates.length} đã chọn`;
-  const chk = $("#select-all");
-  if (chk) chk.checked = state.templates.length > 0
-                      && state.selected.size === state.templates.length;
-  updateRunMatrix();
+async function loadTemplates() {
+  try {
+    const res = await fetch("/api/templates");
+    const d = await res.json();
+    state.groups = d.groups || [];
+    state.templates = d.items || [];
+    // Bộ đang chọn mà bị xoá mất thì bỏ chọn, đừng để treo một cái tên không còn
+    const g = state.groups.find(x => x.name === state.selectedGroup);
+    if (!g) {
+      state.selectedGroup = null;
+      state.pickedItems.clear();
+    } else {
+      // Ảnh bị xoá khỏi thư mục thì bỏ khỏi danh sách tích; ảnh mới thêm vào thì
+      // tích luôn, coi như "cả bộ" vẫn đúng nghĩa.
+      const rels = new Set(g.items.map(it => it.rel));
+      state.pickedItems.forEach(r => { if (!rels.has(r)) state.pickedItems.delete(r); });
+    }
+    renderTemplates();
+  } catch (err) {
+    console.error("Lỗi load templates:", err);
+  }
 }
 
-function markTplSelected(card, on) {
+function currentGroup() {
+  return state.groups.find(x => x.name === state.selectedGroup) || null;
+}
+
+// Ảnh sẽ được gen: các ảnh ĐANG TÍCH trong bộ đang chọn, giữ nguyên thứ tự gốc
+// của thư mục (thứ tự này quyết định thứ tự gửi lên ChatGPT).
+function selectedItems() {
+  const g = currentGroup();
+  if (!g) return [];
+  return g.items.filter(it => state.pickedItems.has(it.rel));
+}
+
+function pickAll(group) {
+  state.pickedItems = new Set((group?.items || []).map(it => it.rel));
+}
+
+// Cập nhật phần bên trong một thẻ bộ mà KHÔNG dựng lại DOM: giữ được hiệu ứng
+// và không làm hụt cú click tiếp theo.
+function syncGroupCard(card) {
+  const g = state.groups.find(x => x.name === card.dataset.group);
+  if (!g) return;
+  const on = g.name === state.selectedGroup;
   card.classList.toggle("selected", on);
-  const badge = card.querySelector(".tpl-badge-select");
-  if (badge) badge.textContent = on ? "✓" : "+";
-  card.title = `Click để ${on ? "bỏ chọn" : "chọn"} ảnh`;
+  card.querySelectorAll(".item-tile").forEach(tile => {
+    tile.classList.toggle("picked", on && state.pickedItems.has(tile.dataset.rel));
+  });
+  const cnt = card.querySelector(".picked-count");
+  if (cnt) {
+    const n = on ? selectedItems().length : g.count;
+    cnt.textContent = on ? `${n}/${g.count} ảnh` : `${g.count} ảnh`;
+  }
+}
+
+function markGroupSelected() {
+  $("#tpl-grid")?.querySelectorAll(".group-card").forEach(syncGroupCard);
+}
+
+function syncTplCount() {
+  const el = $("#tpl-count .stat-val") || $("#tpl-count");
+  const n = selectedItems().length;
+  const g = currentGroup();
+  if (el) {
+    el.textContent = g ? `${g.name} · ${n}/${g.count} ảnh`
+                       : `${state.groups.length} bộ`;
+  }
+  updateRunMatrix();
 }
 
 function renderTemplates() {
   const grid = $("#tpl-grid");
   const empty = $("#tpl-empty");
   const toolbar = $("#gallery-toolbar");
-
   if (!grid) return;
 
-  const count = state.templates.length;
-  if (count === 0) {
+  if (state.groups.length === 0) {
+    _sig.tpl = null;
     grid.innerHTML = "";
     empty.hidden = false;
     if (toolbar) toolbar.hidden = true;
-    const tplEl = $("#tpl-count .stat-val") || $("#tpl-count");
-    if (tplEl) tplEl.textContent = `0 đã chọn`;
-    updateRunMatrix();
+    $("#dropzone")?.classList.remove("is-hidden");
+    syncTplCount();
     return;
   }
 
   empty.hidden = true;
   if (toolbar) toolbar.hidden = false;
+  // Có bộ rồi thì khung hướng dẫn kéo thả thành thừa - nút "+ Tải thư mục" ở
+  // đầu panel đã làm đúng việc đó, mà nó thì chiếm mất một mảng màn hình.
+  $("#dropzone")?.classList.add("is-hidden");
 
   const q = state.filterQuery.toLowerCase().trim();
-  const displayed = q ? state.templates.filter(t => t.name.toLowerCase().includes(q)) : state.templates;
+  const shown = q ? state.groups.filter(g => g.name.toLowerCase().includes(q))
+                  : state.groups;
 
-  // Danh sách ảnh và ô tìm kiếm mới là thứ quyết định phải vẽ lại; việc chọn/bỏ
-  // chọn được xử lý tại chỗ ở dưới nên không tính vào đây.
-  if (!changed("tpl", [displayed.map(t => t.name)])) {
-    displayed.forEach(t => {
-      const card = grid.querySelector(`.tpl-card[data-name="${CSS.escape(t.name)}"]`);
-      if (card) markTplSelected(card, state.selected.has(t.name));
-    });
+  // Chọn bộ nào là chuyện sửa class tại chỗ, không tính vào chữ ký vẽ lại.
+  if (!changed("tpl", shown.map(g => [g.name, g.items.map(i => i.rel)]))) {
+    markGroupSelected();
     syncTplCount();
     return;
   }
 
-  grid.innerHTML = displayed.map(t => {
-    const isSelected = state.selected.has(t.name);
-    return `
-      <div class="tpl-card ${isSelected ? "selected" : ""}" data-name="${esc(t.name)}" title="Click để ${isSelected ? "bỏ chọn" : "chọn"} ảnh">
-        <div class="tpl-img-box">
-          <span class="tpl-badge-select">
-            ${isSelected ? `✓` : `+`}
-          </span>
-          <button type="button" class="tpl-btn-preview" data-preview="${esc(t.url)}" data-cap="${esc(t.name)}" onclick="event.stopPropagation(); window.openLightbox('${esc(t.url)}', '${esc(t.name)}');" title="Xem ảnh lớn">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-          </button>
-          <button type="button" class="tpl-btn-del" data-del="${esc(t.name)}" title="Xoá ảnh này">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
-          </button>
-          <img src="${t.url}" loading="lazy" alt="${esc(t.name)}">
-        </div>
-        <div class="tpl-card-footer">
-          <span class="tpl-card-name" title="${esc(t.name)}">${esc(t.name)}</span>
-        </div>
+  grid.innerHTML = shown.map(g => `
+    <div class="group-card ${g.name === state.selectedGroup ? "selected" : ""}"
+         data-group="${esc(g.name)}">
+      <div class="group-head">
+        <span class="group-check" aria-hidden="true"></span>
+        <span class="group-name" title="${esc(g.name)}">${esc(g.name)}</span>
+        <span class="group-count picked-count">${g.count} ảnh</span>
+        <button type="button" class="group-del" data-delgroup="${esc(g.name)}"
+                title="Xoá bộ này">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+        </button>
       </div>
-    `;
-  }).join("");
 
-  stagger(grid, ".tpl-card");
+      <!-- Dải ảnh LUÔN hiện, chỉ đổi cỡ: thu gọn thì là ảnh xem trước, khi bộ
+           được chọn thì to ra và bấm được để bỏ tích từng sản phẩm. Nhờ vậy bố
+           cục không nhảy khi chọn/bỏ chọn. -->
+      <div class="item-tiles">
+        ${g.items.map(it => `
+          <button type="button" class="item-tile" data-rel="${esc(it.rel)}"
+                  title="${esc(it.name)}" tabindex="-1">
+            <img src="${it.url}" loading="lazy" alt="${esc(it.name)}">
+            <span class="item-tick">✓</span>
+          </button>
+        `).join("")}
+      </div>
 
-  grid.querySelectorAll(".tpl-card").forEach(card => {
-    card.addEventListener("click", (e) => {
-      if (e.target.closest("[data-del]") || e.target.closest("[data-preview]")) return;
-      const name = card.dataset.name;
-      const on = !state.selected.has(name);
-      if (on) state.selected.add(name); else state.selected.delete(name);
-      // Sửa tại chỗ thay vì vẽ lại cả lưới: giữ được hiệu ứng và mượt tay hơn.
-      markTplSelected(card, on);
+      <div class="item-bar">
+        <button type="button" class="link-btn" data-pickall>Chọn hết</button>
+        <span class="item-bar-sep">·</span>
+        <button type="button" class="link-btn" data-picknone>Bỏ hết</button>
+      </div>
+    </div>
+  `).join("");
+
+  stagger(grid, ".group-card");
+
+  grid.querySelectorAll(".group-card").forEach(card => {
+    const g = state.groups.find(x => x.name === card.dataset.group);
+
+    card.querySelector(".group-head")?.addEventListener("click", (e) => {
+      if (e.target.closest("[data-delgroup]")) return;
+      // Bấm lại vào bộ đang chọn thì bỏ chọn - khỏi phải đi tìm nút huỷ.
+      if (state.selectedGroup === g.name) {
+        state.selectedGroup = null;
+        state.pickedItems.clear();
+      } else {
+        state.selectedGroup = g.name;
+        pickAll(g);                 // chọn bộ = mặc định lấy hết, bỏ bớt sau
+      }
+      markGroupSelected();
+      syncTplCount();
+    });
+
+    card.querySelectorAll(".item-tile").forEach(tile => {
+      tile.addEventListener("click", () => {
+        if (state.selectedGroup !== g.name) return;
+        const rel = tile.dataset.rel;
+        if (state.pickedItems.has(rel)) state.pickedItems.delete(rel);
+        else state.pickedItems.add(rel);
+        syncGroupCard(card);
+        syncTplCount();
+      });
+    });
+
+    card.querySelector("[data-pickall]")?.addEventListener("click", () => {
+      pickAll(g);
+      syncGroupCard(card);
+      syncTplCount();
+    });
+    card.querySelector("[data-picknone]")?.addEventListener("click", () => {
+      state.pickedItems.clear();
+      syncGroupCard(card);
       syncTplCount();
     });
   });
 
-  grid.querySelectorAll("[data-del]").forEach(btn => {
+  grid.querySelectorAll("[data-delgroup]").forEach(btn => {
     btn.addEventListener("click", async (e) => {
       e.stopPropagation();
-      const name = btn.dataset.del;
-      await fetch(`/api/templates/${name}`, { method: "DELETE" });
-      state.selected.delete(name);
+      const name = btn.dataset.delgroup;
+      if (!confirm(`Xoá bộ "${name}" và toàn bộ ảnh trong đó?`)) return;
+      const r = await (await fetch(`/api/templates/group/${encodeURIComponent(name)}`,
+                                   { method: "DELETE" })).json();
+      if (state.selectedGroup === name) {
+        state.selectedGroup = null;
+        state.pickedItems.clear();
+      }
+      showToast(`Đã xoá bộ "${name}" (${r.deleted} ảnh)`, "info");
       loadTemplates();
-      showToast(`Đã xoá ${name}`, "info");
-    });
-  });
-
-  grid.querySelectorAll("[data-preview]").forEach(btn => {
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      window.openLightbox(btn.dataset.preview, btn.dataset.cap);
     });
   });
 
@@ -764,23 +844,13 @@ $("#tpl-search")?.addEventListener("input", (e) => {
   renderTemplates();
 });
 
-$("#select-all")?.addEventListener("change", (e) => {
-  if (e.target.checked) {
-    state.selected = new Set(state.templates.map(t => t.name));
-  } else {
-    state.selected.clear();
-  }
-  $("#tpl-grid")?.querySelectorAll(".tpl-card").forEach(card =>
-    markTplSelected(card, state.selected.has(card.dataset.name)));
-  syncTplCount();
-});
-
 $("#clear-templates")?.addEventListener("click", async () => {
-  if (!confirm(`Xoá tất cả ${state.templates.length} ảnh template?`)) return;
+  if (!confirm(`Xoá tất cả ${state.groups.length} bộ (${state.templates.length} ảnh)?`)) return;
   await fetch("/api/templates", { method: "DELETE" });
-  state.selected.clear();
+  state.selectedGroup = null;
+  state.pickedItems.clear();
   loadTemplates();
-  showToast("Đã xoá hết ảnh", "info");
+  showToast("Đã xoá hết", "info");
 });
 
 const dropzone = $("#dropzone");
@@ -789,6 +859,7 @@ const folderInput = $("#folder-input");
 
 fileInput?.addEventListener("change", () => uploadFiles(fileInput.files));
 $("#pick-folder")?.addEventListener("click", () => folderInput?.click());
+$("#pick-files")?.addEventListener("click", () => fileInput?.click());
 folderInput?.addEventListener("change", () => {
   uploadFiles(folderInput.files);
   folderInput.value = "";
@@ -866,13 +937,25 @@ async function uploadFiles(fileList) {
   }
 
   const fd = new FormData();
-  files.forEach(f => fd.append("files", f));
+  files.forEach(f => {
+    fd.append("files", f);
+    // webkitRelativePath = "ThuMucCha/ThuMucCon/anh.png". Server lấy thư mục NGAY
+    // TRÊN file làm tên bộ. Kéo thả ảnh lẻ thì chuỗi này rỗng -> vào nhóm mặc định.
+    fd.append("paths", f.webkitRelativePath || "");
+  });
+
+  const nGroups = new Set(files.map(f => {
+    const parts = (f.webkitRelativePath || "").split("/");
+    return parts.length >= 2 ? parts[parts.length - 2] : "";
+  })).size;
 
   showToast(`Đang tải lên ${files.length} ảnh...`, "info");
   try {
     await fetch("/api/templates/upload", { method: "POST", body: fd });
     if (fileInput) fileInput.value = "";
-    showToast(`Đã tải lên ${files.length} ảnh`, "success");
+    showToast(nGroups > 1
+      ? `Đã tải lên ${files.length} ảnh trong ${nGroups} bộ`
+      : `Đã tải lên ${files.length} ảnh`, "success");
     loadTemplates();
   } catch (err) {
     showToast("Lỗi khi tải ảnh", "error");
@@ -953,6 +1036,18 @@ $("#csv-input")?.addEventListener("change", async (e) => {
   }
 });
 
+function markPromptSelected() {
+  $("#prompt-list")?.querySelectorAll(".prompt-card").forEach(card => {
+    card.classList.toggle("selected", state.selectedPrompts.has(card.dataset.id));
+  });
+  const badge = $("#prompt-select-badge");
+  const badgeCount = $("#prompt-select-count");
+  const n = state.selectedPrompts.size;
+  if (badge) badge.hidden = n === 0;
+  if (badgeCount && n) badgeCount.textContent = `${n} đã chọn`;
+  updateRunMatrix();
+}
+
 function renderPrompts() {
   const list = $("#prompt-list");
   const badge = $("#prompt-select-badge");
@@ -982,8 +1077,11 @@ function renderPrompts() {
     return;
   }
 
-  if (!changed("prompt", [state.prompts.map(p => [p.id, p.name, p.text]),
-                          [...state.selectedPrompts]])) {
+  // Lựa chọn KHÔNG nằm trong chữ ký: tích một prompt mà dựng lại cả danh sách
+  // thì mọi thẻ chạy lại hiệu ứng "vừa xuất hiện" -> chớp loạn cả màn hình. Đổi
+  // lựa chọn chỉ cần đổi class của đúng thẻ đó.
+  if (!changed("prompt", state.prompts.map(p => [p.id, p.name, p.text]))) {
+    markPromptSelected();
     return;
   }
 
@@ -1033,8 +1131,7 @@ function renderPrompts() {
         state.selectedPrompts.add(id);
       }
       state.promptId = [...state.selectedPrompts][0] || null;
-      renderPrompts();
-      updateRunMatrix();
+      markPromptSelected();
     });
   });
 
@@ -1067,8 +1164,7 @@ $("#btn-select-all-prompts")?.addEventListener("click", () => {
     state.selectedPrompts = new Set(state.prompts.map(p => p.id));
   }
   state.promptId = [...state.selectedPrompts][0] || null;
-  renderPrompts();
-  updateRunMatrix();
+  markPromptSelected();
 });
 
 $("#new-prompt")?.addEventListener("click", () => openPromptForm(null));
@@ -1122,7 +1218,7 @@ promptForm?.addEventListener("submit", async (e) => {
 // ==========================================================================
 
 function updateRunMatrix() {
-  const tplCount = state.selected.size;
+  const tplCount = selectedItems().length;
   const promptCount = state.selectedPrompts.size;
 
   const statusPill = $("#runbar-status-pill");
@@ -1162,8 +1258,10 @@ function updateRunMatrix() {
     }
     if (runBtn) runBtn.disabled = true;
     if (runBtnText) runBtnText.textContent = "Tạo Mockup";
-    if (tplCount === 0) {
-      if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 ảnh template`;
+    if (!state.selectedGroup) {
+      if (mainMsg) mainMsg.textContent = `Chọn 1 bộ mockup`;
+    } else if (tplCount === 0) {
+      if (mainMsg) mainMsg.textContent = `Bộ này chưa tích ảnh nào`;
     } else {
       if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 prompt`;
     }
@@ -1175,12 +1273,15 @@ function updateRunMatrix() {
     if (runBtn) runBtn.disabled = false;
     const activePrompt = state.prompts.find(p => state.selectedPrompts.has(p.id));
     const pName = activePrompt ? activePrompt.name : "Prompt";
+    const gName = state.selectedGroup || "";
     if (promptCount === 1) {
       if (runBtnText) runBtnText.textContent = `Tạo Mockup (${tplCount})`;
-      if (mainMsg) mainMsg.innerHTML = `<b>${tplCount}</b> ảnh · <b>${esc(pName)}</b>`;
+      if (mainMsg) mainMsg.innerHTML =
+        `<b>${esc(gName)}</b> · ${tplCount} ảnh · <b>${esc(pName)}</b>`;
     } else {
       if (runBtnText) runBtnText.textContent = `Tạo ${promptCount} bộ`;
-      if (mainMsg) mainMsg.innerHTML = `<b>${tplCount}</b> ảnh · <b>${promptCount}</b> prompt`;
+      if (mainMsg) mainMsg.innerHTML =
+        `<b>${esc(gName)}</b> · ${tplCount} ảnh · <b>${promptCount}</b> prompt`;
     }
   }
 }
@@ -1212,7 +1313,7 @@ function showResultsPanel() {
 }
 
 async function startGenerate() {
-  if (state.selected.size === 0 || state.selectedPrompts.size === 0) return;
+  if (selectedItems().length === 0 || state.selectedPrompts.size === 0) return;
   const profiles = allProfileNames();
   if (profiles.length === 0) {
     showToast("Chưa có tài khoản nào. Thêm tài khoản trước đã.", "error");
@@ -1222,7 +1323,7 @@ async function startGenerate() {
   state.isStopped = false;
   const payload = {
     profiles,
-    templates: [...state.selected],
+    templates: selectedItems().map(it => it.rel),
     prompt_ids: [...state.selectedPrompts],
     count: 1,
     skip_done: skipDone()
@@ -1494,6 +1595,8 @@ function renderFleetBar(fleet, exhausted) {
 const _shownDone = new Set();
 
 function jobCardHTML(j) {
+  // Job cũ lưu từ phiên trước có thể còn kèm thư mục cha -> cắt ở đây cho chắc
+  const fileName = String(j.template_name || "").split("/").pop();
   const isDone = j.status === "done" && j.result_url;
   const justDone = isDone && !_shownDone.has(j.id);
   if (isDone) _shownDone.add(j.id);
@@ -1502,9 +1605,9 @@ function jobCardHTML(j) {
   const cls = isDone ? "done" : (isRunning ? "running" : (isFailed ? "failed" : "pending"));
 
   const body = isDone
-    ? `<img class="job-mockup-img" src="${j.result_url}" alt="${esc(j.template_name)}"
+    ? `<img class="job-mockup-img" src="${j.result_url}" alt="${esc(fileName)}"
             loading="lazy"
-            onclick="window.openLightbox('${j.result_url}', '${esc(j.template_name)}')">`
+            onclick="window.openLightbox('${j.result_url}', '${esc(fileName)}')">`
     : `<div class="job-slot-empty">
          ${isRunning ? `<span class="spin-ring"></span>`
            : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">✕</span>` : "")}
@@ -1520,7 +1623,7 @@ function jobCardHTML(j) {
           </a>` : ""}
       </div>
       <div class="job-footer">
-        <span class="job-filename" title="${esc(j.template_name)}">${esc(j.template_name)}</span>
+        <span class="job-filename" title="${esc(fileName)}">${esc(fileName)}</span>
       </div>
     </div>
   `;

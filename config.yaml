@@ -1,13 +1,7 @@
 browser:
   headless: false
   profiles_dir: ./.chrome-profiles
-  profiles:
-  - name: acc1
-    tabs: 1
-    email: yenyeusung@gmail.com
-  - name: acc2
-    tabs: 1
-    email: russobranham5854+1@gmail.com
+  profiles: []
   tabs_per_account: 1
   generation_timeout: 300
   nav_timeout: 90

@@ -71,7 +71,7 @@
         <div class="panel-head">
           <div class="panel-title-group">
             <div class="section-title-wrap">
-              <h2>Mẫu Template</h2>
+              <h2>Bộ Mockup</h2>
             </div>
             <span id="tpl-count" class="stat-pill-badge cyan">
               <span class="stat-dot cyan"></span>
@@ -80,15 +80,15 @@
           </div>
 
           <div class="panel-head-actions">
-            <button type="button" class="btn primary-subtle sm" onclick="document.getElementById('file-input').click();">
+            <button type="button" id="pick-folder" class="btn primary-subtle sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
-              Tải ảnh
+              Tải thư mục
             </button>
             <details class="menu">
               <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
               <div class="menu-pop">
-                <button type="button" id="pick-folder" class="menu-item">Tải cả thư mục</button>
-                <button id="clear-templates" class="menu-item danger">Xoá hết ảnh</button>
+                <button type="button" id="pick-files" class="menu-item">Tải ảnh lẻ</button>
+                <button id="clear-templates" class="menu-item danger">Xoá hết</button>
               </div>
             </details>
           </div>
@@ -98,36 +98,30 @@
         <input type="file" id="folder-input" webkitdirectory multiple hidden>
 
         <!-- Dropzone -->
-        <label id="dropzone" class="dropzone-modern" for="file-input">
+        <label id="dropzone" class="dropzone-modern" for="folder-input">
           <div class="dropzone-icon-ring">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
           </div>
-          <span class="dropzone-label">Kéo thả ảnh hoặc cả thư mục vào đây, hoặc bấm <b>+ Tải ảnh</b></span>
+          <span class="dropzone-label">Kéo thả thư mục cha vào đây — mỗi thư mục con là một bộ</span>
         </label>
 
         <!-- Gallery Toolbar -->
         <div class="gallery-toolbar" id="gallery-toolbar" hidden>
-          <label class="custom-chk">
-            <input type="checkbox" id="select-all">
-            <span class="chk-box"></span>
-            <span id="select-all-label">Chọn tất cả</span>
-          </label>
+          <span class="toolbar-hint">Chọn <b>một</b> bộ, bỏ tích sản phẩm không cần</span>
 
           <div class="gallery-right-tools">
             <div class="search-input-wrap">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
-              <input type="text" id="tpl-search" placeholder="Tìm ảnh...">
+              <input type="text" id="tpl-search" placeholder="Tìm bộ...">
             </div>
           </div>
         </div>
 
-        <!-- Template Grid -->
-        <div id="tpl-grid" class="tpl-grid"></div>
+        <!-- Danh sách bộ (thư mục con) -->
+        <div id="tpl-grid" class="group-list"></div>
 
         <!-- Empty State -->
-        <div id="tpl-empty" class="empty-state">
-          <p>Chưa có ảnh nào. Bấm <b>"Tải ảnh"</b> hoặc kéo thả ảnh vào khung trên.</p>
-        </div>
+        <div id="tpl-empty" class="empty-state" hidden></div>
       </section>
 
       <!-- PROMPTS SECTION -->

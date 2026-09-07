@@ -1166,7 +1166,6 @@ body {
   background: var(--bg-card);
   border: 1.5px solid var(--border);
   cursor: pointer;
-  transition: all 0.15s ease;
   width: 100%;
 }
 
@@ -2028,25 +2027,48 @@ body {
 }
 
 /* Prompt Card Selection Checkbox / Indicator */
+/* Ô tích prompt. Phản hồi phải nằm NGAY chỗ ngón tay vừa bấm và kết thúc dưới
+   200ms; trước đây tích một prompt là cả danh sách dựng lại và chạy lại hiệu ứng
+   "vừa xuất hiện" - chớp cả màn hình mà không chỉ ra được mình vừa bấm cái nào. */
 .prompt-card-chk {
+  position: relative;
   width: 18px;
   height: 18px;
-  border-radius: 4px;
-  border: 2px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  color: white;
-  transition: all 0.15s ease;
+  border-radius: 5px;
+  border: 2px solid var(--border-strong);
+  display: grid;
+  place-items: center;
   flex-shrink: 0;
   margin-top: 2px;
+  transition: background-color 0.15s ease, border-color 0.15s ease,
+              transform 0.16s var(--ease-spring);
+}
+
+.prompt-card-chk::after {
+  content: "✓";
+  font-size: 11px;
+  font-weight: 800;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.14s ease, transform 0.2s var(--ease-spring);
 }
 
 .prompt-item.selected .prompt-card-chk {
   background: #8b5cf6;
   border-color: #8b5cf6;
+  transform: scale(1.1);
 }
+
+.prompt-item.selected .prompt-card-chk::after { opacity: 1; transform: scale(1); }
+
+/* Viền tím chạy vào mềm thay vì bật ra khô khốc */
+.prompt-card {
+  transition: border-color 0.18s ease, box-shadow 0.18s ease,
+              background-color 0.18s ease, transform 0.12s var(--ease-spring);
+}
+
+.prompt-card:active { transform: scale(0.995); }
 
 .prompt-item.selected .prompt-card-chk::after {
   content: "✓";
@@ -2581,7 +2603,7 @@ button.pool-stat-pill:focus-visible {
 
 /* Thẻ template / prompt: đổ dây nhẹ. Hai danh sách này chỉ vẽ lại khi thật sự
    đổi (xem chốt `changed()` trong app.js) nên không bị chạy lại liên tục. */
-.tpl-card,
+.group-card,
 .prompt-card,
 .pcard {
   animation: rise-in 0.3s var(--ease-out-soft) both;
@@ -2680,6 +2702,210 @@ button.pool-stat-pill:focus-visible {
 }
 
 .runbar { animation: runbar-in 0.42s var(--ease-out-soft) 0.12s both; }
+
+/* ==========================================================================
+   BỘ MOCKUP (v56)
+
+   Một khung duy nhất cho cả hai trạng thái. Bản trước giấu dải ảnh khi chọn nên
+   tên bộ nhảy sang trái, dấu tích lại dính vào nút xoá - nhìn như bố cục vỡ.
+   Nay: hàng tiêu đề CỐ ĐỊNH (ô tích - tên - số ảnh - nút xoá), dải ảnh LUÔN ở
+   đúng chỗ đó, chỉ đổi kích thước khi bộ được chọn.
+   ========================================================================== */
+
+.group-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.group-card {
+  --tile: 34px;                 /* cỡ ảnh lúc thu gọn */
+  position: relative;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  overflow: hidden;
+}
+
+.group-card.selected {
+  --tile: 68px;                 /* chọn rồi thì to ra cho dễ bấm */
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  animation: none;
+}
+
+/* ---------- hàng tiêu đề: bốn ô, thứ tự không bao giờ đổi ---------- */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.group-head:active { transform: scale(0.996); }
+
+/* Ô tích tròn luôn chiếm chỗ, rỗng khi chưa chọn - nhờ vậy tên bộ đứng yên */
+.group-check {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-strong);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.group-check::after {
+  content: "✓";
+  font-size: 0.66rem;
+  font-weight: 800;
+  color: #fff;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s ease, transform 0.18s var(--ease-spring);
+}
+
+.group-card.selected .group-check {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.group-card.selected .group-check::after { opacity: 1; transform: scale(1); }
+
+.group-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 650;
+  font-size: 0.9rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-count {
+  flex: 0 0 auto;
+  font-family: var(--f-mono);
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+
+.group-card.selected .group-count { color: var(--accent); }
+
+.group-del {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-xs);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.group-card:hover .group-del { opacity: 1; }
+.group-del:hover { background: var(--err-soft); color: var(--err); }
+
+/* ---------- dải ảnh: cùng một chỗ, chỉ đổi cỡ ---------- */
+.item-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 12px 10px 42px;    /* 42px = thẳng hàng với tên bộ ở trên */
+}
+
+.item-tile {
+  position: relative;
+  width: var(--tile);
+  height: var(--tile);
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-xs);
+  background: var(--bg-card-hover);
+  overflow: hidden;
+  cursor: default;
+  pointer-events: none;         /* chưa chọn bộ thì ảnh chỉ để xem */
+  filter: grayscale(1);
+  opacity: 0.5;
+  transition: opacity 0.18s ease, filter 0.18s ease, border-color 0.16s ease,
+              transform 0.12s var(--ease-spring);
+}
+
+.item-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.group-card.selected .item-tile {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.group-card.selected .item-tile.picked {
+  filter: none;
+  opacity: 1;
+  border-color: var(--accent);
+}
+
+.group-card.selected .item-tile:hover { transform: translateY(-2px); }
+.group-card.selected .item-tile:active { transform: scale(0.95); }
+
+.item-tick {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.6rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s ease, transform 0.18s var(--ease-spring);
+}
+
+.group-card.selected .item-tile.picked .item-tick { opacity: 1; transform: scale(1); }
+
+/* ---------- hàng nút phụ: chỉ có nghĩa khi bộ đang được chọn ---------- */
+.item-bar {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 10px 42px;
+}
+
+.group-card.selected .item-bar { display: flex; }
+
+.item-bar-sep { color: var(--border-strong); }
+
+.link-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.link-btn:hover { text-decoration: underline; }
+
+#dropzone.is-hidden { display: none; }
+
+/* Khung rỗng không có chữ thì đừng chiếm chỗ */
+.empty-state:empty { display: none; }
+
+.toolbar-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
 
 /* --- người dùng tắt hiệu ứng thì tôn trọng --- */
 @media (prefers-reduced-motion: reduce) {
