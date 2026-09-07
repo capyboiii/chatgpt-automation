@@ -156,13 +156,18 @@ async function uploadImages(list) {
 }
 
 // ==========================================================================
-// 2. Prompt
+// 2. Prompt — y hệt trang chính, dùng chung /api/prompts nên tạo/sửa/xoá ở đâu
+//    thì trang kia cũng thấy ngay.
 // ==========================================================================
+
+const promptForm = $("#prompt-form");
 
 async function loadPrompts() {
   try {
     const d = await (await fetch("/api/prompts")).json();
-    state.prompts = d.prompts || d.items || [];
+    state.prompts = d.items || [];
+    const valid = new Set(state.prompts.map(p => p.id));
+    state.pickedPrompts.forEach(id => { if (!valid.has(id)) state.pickedPrompts.delete(id); });
     renderPrompts();
   } catch (e) {
     console.error("Lỗi load prompts:", e);
@@ -186,10 +191,14 @@ function renderPrompts() {
   if (!list) return;
 
   if (state.prompts.length === 0) {
-    list.innerHTML = `<div class="empty-state">Chưa có prompt. Tạo ở <a href="/">trang chính</a>.</div>`;
+    _sig.prompt = null;
+    list.innerHTML = `<div class="empty-state">Chưa có Prompt. Bấm "Tạo Prompt" để thêm.</div>`;
+    markPromptPicked();
     return;
   }
 
+  // Lựa chọn KHÔNG nằm trong chữ ký: tích một prompt mà dựng lại cả danh sách thì
+  // mọi thẻ chạy lại hiệu ứng "vừa xuất hiện" -> chớp loạn màn hình.
   if (!changed("prompt", state.prompts.map(p => [p.id, p.name, p.text]))) {
     markPromptPicked();
     return;
@@ -197,18 +206,40 @@ function renderPrompts() {
 
   list.innerHTML = state.prompts.map((p, i) => `
     <div class="prompt-card prompt-item ${state.pickedPrompts.has(p.id) ? "selected" : ""}"
-         data-id="${esc(p.id)}" style="--i:${Math.min(i, 14)}">
+         data-id="${esc(p.id)}" style="--i:${Math.min(i, 14)}" title="Click để chọn/bỏ chọn">
       <span class="prompt-index">${i + 1}</span>
       <span class="prompt-card-chk"></span>
       <div class="prompt-content">
         <div class="prompt-title">${esc(p.name)}</div>
         <div class="prompt-snippet">${esc(p.text)}</div>
+        ${p.text.length > 120 ? `
+        <div class="prompt-meta">
+          <button type="button" class="prompt-more" data-more="${esc(p.id)}">Xem thêm</button>
+        </div>` : ""}
+      </div>
+      <div class="prompt-actions">
+        <button class="icon-action" data-edit="${esc(p.id)}" title="Sửa">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"></path></svg>
+        </button>
+        <button class="icon-action danger" data-delprompt="${esc(p.id)}" title="Xoá">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
+        </button>
       </div>
     </div>
   `).join("");
 
+  list.querySelectorAll("[data-more]").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const card = btn.closest(".prompt-card");
+      btn.textContent = card.classList.toggle("expanded") ? "Thu gọn" : "Xem thêm";
+    });
+  });
+
   list.querySelectorAll(".prompt-card").forEach(card => {
-    card.addEventListener("click", () => {
+    card.addEventListener("click", (e) => {
+      if (e.target.closest("[data-edit]") || e.target.closest("[data-delprompt]")
+          || e.target.closest("[data-more]")) return;
       const id = card.dataset.id;
       if (state.pickedPrompts.has(id)) state.pickedPrompts.delete(id);
       else state.pickedPrompts.add(id);
@@ -216,8 +247,182 @@ function renderPrompts() {
     });
   });
 
+  list.querySelectorAll("[data-edit]").forEach(btn => {
+    btn.addEventListener("click", () => openPromptForm(btn.dataset.edit));
+  });
+
+  list.querySelectorAll("[data-delprompt]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const id = btn.dataset.delprompt;
+      if (!confirm("Xoá Prompt này?")) return;
+      await fetch(`/api/prompts/${id}`, { method: "DELETE" });
+      state.pickedPrompts.delete(id);
+      showToast("Đã xoá Prompt", "info");
+      loadPrompts();
+    });
+  });
+
   markPromptPicked();
 }
+
+$("#btn-select-all-prompts")?.addEventListener("click", () => {
+  if (state.prompts.length === 0) return;
+  const all = state.pickedPrompts.size === state.prompts.length;
+  state.pickedPrompts = all ? new Set() : new Set(state.prompts.map(p => p.id));
+  markPromptPicked();
+});
+
+$("#clear-prompts")?.addEventListener("click", async () => {
+  const n = state.prompts.length;
+  if (!n) return;
+  if (!confirm(`Xoá toàn bộ ${n} prompt?`)) return;
+  try {
+    const r = await (await fetch("/api/prompts", { method: "DELETE" })).json();
+    state.pickedPrompts.clear();
+    showToast(`Đã xoá ${r.deleted} prompt`, "info");
+    loadPrompts();
+  } catch (e) {
+    showToast(`Lỗi: ${e.message}`, "error");
+  }
+});
+
+// ---- Nhập từ CSV ----------------------------------------------------------
+$("#btn-import-csv")?.addEventListener("click", () => $("#csv-input")?.click());
+
+$("#csv-input")?.addEventListener("change", async (e) => {
+  const file = e.target.files?.[0];
+  e.target.value = "";
+  if (!file) return;
+  const btn = $("#btn-import-csv");
+  const label = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Đang nhập…";
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const res = await fetch("/api/prompts/import-csv", { method: "POST", body: fd });
+    const d = await res.json();
+    if (!res.ok) showToast(d.detail || "Không nhập được CSV", "error");
+    else {
+      showToast(`Đã nhập ${d.added} prompt`
+                + (d.skipped ? `, bỏ qua ${d.skipped} dòng trống` : ""), "success");
+      loadPrompts();
+    }
+  } catch (err) {
+    showToast(`Lỗi: ${err.message}`, "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+});
+
+// ---- Form tạo / sửa prompt -------------------------------------------------
+$("#new-prompt")?.addEventListener("click", () => openPromptForm(null));
+$("#pf-cancel")?.addEventListener("click", () => { promptForm.hidden = true; });
+$("#pf-close-btn")?.addEventListener("click", () => { promptForm.hidden = true; });
+
+function openPromptForm(id) {
+  const p = id ? state.prompts.find(x => x.id === id) : null;
+  $("#pf-id").value = p ? p.id : "";
+  $("#pf-title").textContent = p ? "Sửa Prompt" : "Tạo Prompt Mới";
+  $("#pf-name").value = p ? p.name : "";
+  $("#pf-text").value = p ? p.text : "";
+  promptForm.hidden = false;
+  $("#pf-name").focus();
+}
+
+promptForm?.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") promptForm.hidden = true;
+  else if ((e.ctrlKey || e.metaKey) && e.key === "Enter") promptForm.requestSubmit();
+});
+
+promptForm?.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const id = $("#pf-id").value;
+  const name = $("#pf-name").value.trim();
+  const text = $("#pf-text").value.trim();
+  try {
+    await fetch(id ? `/api/prompts/${id}` : "/api/prompts", {
+      method: id ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, text }),
+    });
+    promptForm.hidden = true;
+    showToast("Đã lưu Prompt", "success");
+    loadPrompts();
+  } catch (err) {
+    showToast("Lỗi khi lưu Prompt", "error");
+  }
+});
+
+// ---- Khuôn prompt CHUNG (đúng khuôn mà trang chính dùng) -------------------
+let mainPlaceholder = "PASTE DESIGN PROMPT HERE";
+
+function tmStatus(msg, bad) {
+  const el = $("#tm-status");
+  if (!el) return;
+  el.hidden = !msg;
+  el.textContent = msg || "";
+  el.style.color = bad ? "var(--err)" : "";
+}
+
+async function loadMainTpl() {
+  tmStatus("");
+  try {
+    const d = await (await fetch("/api/prompt-template")).json();
+    mainPlaceholder = d.placeholder || mainPlaceholder;
+    $("#tm-text").value = d.template || "";
+    const ph = $("#tm-placeholder");
+    if (ph) ph.textContent = mainPlaceholder;
+  } catch (e) {
+    tmStatus("Không đọc được khuôn prompt.", true);
+  }
+}
+
+$("#btn-prompt-template")?.addEventListener("click", async () => {
+  await loadMainTpl();
+  $("#tpl-modal").hidden = false;
+  $("#tm-text").focus();
+});
+
+const closeTplModal = () => { $("#tpl-modal").hidden = true; };
+$("#tm-close")?.addEventListener("click", closeTplModal);
+$("#tm-cancel")?.addEventListener("click", closeTplModal);
+$("#tm-reload")?.addEventListener("click", loadMainTpl);
+
+$("#tm-save")?.addEventListener("click", async () => {
+  const text = $("#tm-text").value;
+  if (!text.includes(mainPlaceholder)) {
+    return tmStatus(`Khuôn phải chứa dòng "${mainPlaceholder}".`, true);
+  }
+  const btn = $("#tm-save");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/prompt-template", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: text }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "lưu thất bại");
+    showToast("Đã lưu khuôn prompt", "success");
+    closeTplModal();
+  } catch (e) {
+    tmStatus(String(e.message || e), true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// Menu "⋯": <details> lo phần đóng/mở, ở đây chỉ cần bấm ra ngoài hoặc bấm một
+// mục xong thì đóng lại.
+document.addEventListener("click", (e) => {
+  document.querySelectorAll("details.menu[open]").forEach(d => {
+    if (!d.contains(e.target)) d.open = false;
+  });
+  const item = e.target.closest?.(".menu-item");
+  if (item) item.closest("details.menu")?.removeAttribute("open");
+});
 
 // ==========================================================================
 // 3. Tài khoản (chỉ để đếm, luôn chạy trên tất cả)

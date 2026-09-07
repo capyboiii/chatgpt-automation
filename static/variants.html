@@ -65,10 +65,6 @@
           </div>
           <div class="panel-head-actions">
             <input type="file" id="file-input" accept="image/*" multiple hidden>
-            <button type="button" id="btn-var-tpl" class="btn action-btn sm"
-                    title="Sửa đoạn ghi đè số lượng ảnh ghim vào cuối prompt">
-              Khuôn biến thể
-            </button>
             <button type="button" id="pick-files" class="btn primary-subtle sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
               Tải ảnh
@@ -89,18 +85,57 @@
         <div id="img-grid" class="var-img-grid"></div>
       </section>
 
-      <!-- CHỌN PROMPT -->
-      <section class="panel" id="sec-prompt">
+      <!-- CHỌN PROMPT (giống hệt trang chính, dùng chung API /api/prompts) -->
+      <section class="panel panel-prompts" id="sec-prompt">
         <div class="panel-head">
           <div class="panel-title-group">
-            <div class="section-title-wrap"><h2>Prompt</h2></div>
+            <div class="section-title-wrap"><h2>Prompt Thiết Kế</h2></div>
             <span id="prompt-badge" class="stat-pill-badge purple" hidden>
               <span class="stat-dot purple"></span>
               <span class="stat-val" id="prompt-badge-count">0 prompt</span>
             </span>
           </div>
+
+          <div class="panel-head-actions">
+            <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
+            <button id="new-prompt" class="btn primary-subtle sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Tạo Prompt
+            </button>
+            <details class="menu">
+              <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
+              <div class="menu-pop">
+                <button type="button" id="btn-select-all-prompts" class="menu-item">Chọn tất cả prompt</button>
+                <button type="button" id="btn-prompt-template" class="menu-item">Sửa khuôn prompt chung</button>
+                <button type="button" id="btn-var-tpl" class="menu-item">Sửa khuôn biến thể</button>
+                <button type="button" id="btn-import-csv" class="menu-item">Nhập từ CSV</button>
+                <button type="button" id="clear-prompts" class="menu-item danger">Xoá hết prompt</button>
+              </div>
+            </details>
+          </div>
         </div>
+
         <div id="prompt-list" class="prompt-list"></div>
+
+        <form id="prompt-form" class="prompt-form-card" hidden>
+          <div class="form-header">
+            <h4 id="pf-title">Prompt mới</h4>
+            <button type="button" id="pf-close-btn" class="icon-btn-close">✕</button>
+          </div>
+          <input type="hidden" id="pf-id">
+          <div class="form-group">
+            <label class="form-label" for="pf-name">Tên câu lệnh</label>
+            <input type="text" id="pf-name" placeholder="Ví dụ: Áo thun Graphic, Cốc sứ Vintage..." required autocomplete="off">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="pf-text">Nội dung câu lệnh ChatGPT</label>
+            <textarea id="pf-text" rows="4" placeholder="Mô tả chi tiết câu lệnh gửi tới ChatGPT..." required></textarea>
+          </div>
+          <div class="form-actions">
+            <button type="button" id="pf-cancel" class="btn ghost sm">Huỷ</button>
+            <button type="submit" class="btn primary sm">Lưu Prompt</button>
+          </div>
+        </form>
       </section>
 
     </div>
@@ -155,6 +190,31 @@
       <button type="button" id="run-btn" class="btn primary glow-btn" disabled>
         <span id="run-btn-text">Tạo biến thể</span>
       </button>
+    </div>
+  </div>
+
+  <!-- KHUÔN PROMPT CHUNG (giống trang chính) -->
+  <div id="tpl-modal" class="acc-modal" hidden>
+    <div class="acc-modal-backdrop"></div>
+    <div class="acc-modal-card" style="width:min(860px,96vw)">
+      <div class="form-header">
+        <h4>Khuôn prompt dùng chung</h4>
+        <button type="button" id="tm-close" class="icon-btn-close">✕</button>
+      </div>
+      <p class="acc-modal-note">
+        Mỗi lượt gen sẽ thay <code id="tm-placeholder">PASTE DESIGN PROMPT HERE</code>
+        bằng nội dung prompt thiết kế bạn chọn. Dòng đó bắt buộc phải còn trong khuôn.
+      </p>
+      <div class="form-group">
+        <textarea id="tm-text" rows="20" spellcheck="false"
+                  style="font-family:ui-monospace,Consolas,monospace;font-size:12px"></textarea>
+      </div>
+      <p class="acc-modal-note" id="tm-status" hidden></p>
+      <div class="form-actions">
+        <button type="button" id="tm-reload" class="btn ghost sm">Nạp lại</button>
+        <button type="button" id="tm-cancel" class="btn ghost sm">Đóng</button>
+        <button type="button" id="tm-save" class="btn primary sm">Lưu khuôn</button>
+      </div>
     </div>
   </div>
 
