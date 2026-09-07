@@ -1,8 +1,6 @@
 [DESIGN PROMPT]
 [PASTE DESIGN PROMPT HERE]
 
-Use the design concept described above as the core creative direction and apply it to every uploaded transparent PNG product mockup.
-
 IMAGE ROLES:
 - Image A = style/design reference only.
 - Image B = actual tumbler mockup and must be preserved.
@@ -10,6 +8,10 @@ IMAGE ROLES:
 GOAL:
 Create exactly 2 separate square mockup images using 1 single master design only.
 Use the exact same design for both mockups. Do not create 2 different designs.
+
+[OUTPUT SEPARATION & SAFETY]
+- Output exactly 2 separate 1:1 images, generated independently. Never combine, collage, split-screen, overlap, or place both mockups in the same image.
+- Keep any dark, horror, undead, or aggressive elements stylized and non-graphic. No gore, exposed wounds, or graphic bodily damage.
 
 GENERAL RULES:
 - Preserve Image B’s exact tumbler shape, proportions, handle, lid, straw, metallic rim, tapered lower body, and overall structure.

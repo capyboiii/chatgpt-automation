@@ -1615,6 +1615,43 @@ class ChatGPTPool:
             log.debug("request.get lỗi: %s", e)
         return False
 
+    async def _new_tab(self, slot: _Slot) -> bool:
+        """Vứt tab hiện tại, mở TAB MỚI cho slot này. True = có tab dùng được.
+
+        Dùng mỗi khi một lượt gen không ra đúng yêu cầu. Thử lại trong cùng tab là
+        thừa hưởng nguyên đống rác của lượt hỏng:
+          - ảnh còn kẹt trong khung soạn,
+          - băng lỗi "Something went wrong" vẫn nằm trên màn hình,
+          - hội thoại cũ đã chốt một hướng design mà mình không muốn nữa,
+          - và bộ nhớ của tab cứ phình lên vì SPA không giải phóng chat cũ.
+        Tab mới là trang trắng thật sự, nên lượt sau bắt đầu từ số không.
+        """
+        old_page = slot.page
+        try:
+            ctx = old_page.context
+        except Exception as e:  # noqa: BLE001
+            log.warning("[%s] Không lấy được context để mở tab mới: %s", slot.label, e)
+            return False
+
+        try:
+            page = await ctx.new_page()
+        except Exception as e:  # noqa: BLE001
+            log.warning("[%s] Mở tab mới lỗi: %s", slot.label, e)
+            return False
+
+        slot.net = _ImageNet(page)          # tab mới thì bộ bắt ảnh cũng phải mới
+        okp = await self._prepare(page)
+        slot.set_page(page, fresh=okp)
+
+        try:                                 # đóng tab cũ để khỏi ngốn RAM
+            await old_page.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+        log.info("[%s] Đã mở tab mới%s.", slot.label,
+                 "" if okp else " (trang chưa nạp xong, sẽ nạp lại khi gửi)")
+        return True
+
     # ---------------- chạy 1 lượt: TẤT CẢ ảnh trong cùng 1 chat ----------------
     async def _handoff(self, slot: _Slot, col: dict, reason: str,
                        on_update: UpdateCb = None) -> bool:
@@ -1646,6 +1683,8 @@ class ChatGPTPool:
         on_update: UpdateCb = None
     ) -> bool:
         """Thực thi trọn vẹn 1 Collection trong 1 phiên chat duy nhất của 1 slot."""
+        page = slot.page or page          # phòng khi caller giữ tab đã cũ
+
         async def emit(job):
             if on_update:
                 res = on_update(job)
@@ -1715,14 +1754,29 @@ class ChatGPTPool:
             pending = list(chunk)
             first_msg = (ci == 0)
             last_err: Exception | None = None
-            # solo = từ giờ mỗi tin nhắn chỉ hỏi ĐÚNG MỘT ảnh. Bật lên khi lô này
-            # đã một lần trả thiếu, tức là không còn tin được thứ tự nữa.
-            solo = False
 
-            for round_no in range(1, self.max_retries + 2 + len(chunk)):
+            for round_no in range(1, self.max_retries + 2):
                 if not pending or quota or refused or self.stopped:
                     break
-                batch = pending[:1] if solo else pending
+
+                # LƯỢT TRƯỚC KHÔNG ĐẠT -> TAB MỚI, LÀM LẠI TỪ ĐẦU.
+                # Không xin làm nốt trong chat cũ nữa: chat đó đã chốt một hướng
+                # design và còn nguyên rác của lượt hỏng. Tab mới thì không có
+                # ngữ cảnh cũ, nên phải gửi lại prompt gốc kèm ĐỦ ảnh của lô -
+                # cũng là cách duy nhất giữ được tính đồng nhất của cả bộ.
+                if round_no > 1:
+                    if not await self._new_tab(slot):
+                        return await self._handoff(
+                            slot, col, "không mở được tab mới để thử lại", on_update)
+                    page = slot.page
+                    for j in chunk:
+                        j["status"] = "running"
+                        j["error"] = None
+                        await emit(j)
+                    pending = list(chunk)
+                    first_msg = True
+
+                batch = pending
                 # NHIỀU JOB CÙNG MỘT TEMPLATE = xin ChatGPT vài biến thể từ một
                 # ảnh gốc (trang "Biến thể"). Đính kèm thì chỉ gửi MỘT bản - gửi
                 # hai bản giống hệt nhau là ChatGPT hiểu thành hai sản phẩm khác
@@ -1739,7 +1793,7 @@ class ChatGPTPool:
                 imgs: list[_Shot] = []
                 try:
                     if not await self._upload(
-                            page, tpls, allow_new_chat=(first_msg and round_no == 1)):
+                            page, tpls, allow_new_chat=first_msg):
                         raise RuntimeError("không đính kèm được ảnh template")
 
                     # THỨ TỰ THẬT: đọc lại khung soạn xem ChatGPT sẽ nhận ảnh theo
@@ -1783,11 +1837,15 @@ class ChatGPTPool:
                     log.warning("[%s] col '%s' lô %d/%d vòng %d lỗi: %s",
                                 slot.label, col.get("name"), ci + 1, len(chunks), round_no, e)
                     if _is_dead(e):
-                        # Tab/trình duyệt đã chết: thử lại trên page này vô nghĩa, mà
-                        # để slot chạy tiếp là nó nuốt nốt các collection sau rồi fail
-                        # sạch trong vài giây. Bỏ hẳn tài khoản, đẩy việc sang acc khác.
-                        return await self._handoff(
-                            slot, col, f"tab/trình duyệt đã chết ({e})", on_update)
+                        # Tab chết thì thử MỞ TAB MỚI trước - thường cả trình duyệt
+                        # vẫn sống, chỉ một tab hỏng. Mở không được mới là trình
+                        # duyệt chết thật, lúc đó mới bỏ tài khoản.
+                        log.warning("[%s] Tab chết (%s) - thử mở tab mới.",
+                                    slot.label, str(e)[:80])
+                        if not await self._new_tab(slot):
+                            return await self._handoff(
+                                slot, col, f"trình duyệt đã chết ({e})", on_update)
+                        page = slot.page
                     have = list(slot.net.shots()) if slot.net else []
                     if not have:
                         try:
@@ -1806,11 +1864,13 @@ class ChatGPTPool:
                 # bỏ qua một cái ở giữa là toàn bộ tên phía sau lệch một nấc, và
                 # vòng "xin làm nốt" sau đó lệch tiếp. Thà bỏ lượt này rồi hỏi lại
                 # từng ảnh một - lúc đó mỗi tin nhắn một template, không thể lệch.
-                if imgs and len(imgs) < len(batch) and len(batch) > 1:
-                    log.warning("[%s] col '%s': gửi %d template mà chỉ nhận %d ảnh "
-                                "-> bỏ lượt này, hỏi lại từng ảnh một cho khỏi lệch tên.",
+                if imgs and len(imgs) < len(batch):
+                    # Trả thiếu là KHÔNG ĐẠT: gán theo vị trí lúc này là đoán mò,
+                    # ChatGPT bỏ qua một cái ở giữa là lệch tên cả loạt. Bỏ hết,
+                    # vòng sau mở tab mới làm lại.
+                    log.warning("[%s] col '%s': gửi %d ảnh mà chỉ nhận %d "
+                                "-> bỏ lượt này, lượt sau mở tab mới làm lại.",
                                 slot.label, col.get("name"), len(batch), len(imgs))
-                    solo = True
                     imgs = []
 
                 imgs = imgs[:len(batch)]
@@ -1849,9 +1909,8 @@ class ChatGPTPool:
                         f"({last_err or 'không rõ nguyên nhân'})", on_update)
 
                 if pending and not quota and not refused:
-                    log.warning("[%s] col '%s' còn thiếu %d ảnh -> xin ChatGPT làm nốt%s.",
-                                slot.label, col.get("name"), len(pending),
-                                " (từng ảnh một)" if solo else "")
+                    log.warning("[%s] col '%s' còn thiếu %d ảnh -> mở tab mới làm lại.",
+                                slot.label, col.get("name"), len(pending))
                     await asyncio.sleep(2)
 
             for j in pending:
@@ -2046,6 +2105,9 @@ class ChatGPTPool:
                 ok = False
                 crashed = False
                 try:
+                    # Đọc lại slot.page: collection trước có thể đã phải mở tab mới,
+                    # biến `page` bắt được lúc đầu giờ trỏ vào tab đã đóng.
+                    page = slot.page or page
                     ok = await self._run_collection_on_slot(slot, page, col, on_update=on_update)
                 except asyncio.CancelledError:
                     raise
