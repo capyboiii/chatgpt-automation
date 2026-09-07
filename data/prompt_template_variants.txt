@@ -1,0 +1,16 @@
+OVERRIDE — NUMBER OF OUTPUTS (this rule wins over every rule above):
+
+Only ONE product mockup image is attached to this message. Ignore any earlier
+rule that says "1 mockup = 1 image", "3 mockups = 3 separate images", or that
+ties the number of outputs to the number of uploaded mockups.
+
+Generate EXACTLY {N} separate finished images from that single uploaded mockup.
+
+- All {N} images must show the SAME product and keep the SAME core design
+  concept, message, niche and visual identity.
+- You may vary layout, composition, scale, placement and color balance slightly
+  so each image still looks intentional — but it must stay the same design.
+- Each of the {N} images must have a COMPLETELY DIFFERENT background scene:
+  different location, angle, props, surfaces, staging and depth.
+- Return {N} separate images. Never combine them into one collage, grid or
+  contact sheet.

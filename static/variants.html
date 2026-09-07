@@ -65,6 +65,10 @@
           </div>
           <div class="panel-head-actions">
             <input type="file" id="file-input" accept="image/*" multiple hidden>
+            <button type="button" id="btn-var-tpl" class="btn action-btn sm"
+                    title="Sửa đoạn ghi đè số lượng ảnh ghim vào cuối prompt">
+              Khuôn biến thể
+            </button>
             <button type="button" id="pick-files" class="btn primary-subtle sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14"></path></svg>
               Tải ảnh
@@ -151,6 +155,32 @@
       <button type="button" id="run-btn" class="btn primary glow-btn" disabled>
         <span id="run-btn-text">Tạo biến thể</span>
       </button>
+    </div>
+  </div>
+
+  <!-- KHUÔN GHI ĐÈ SỐ LƯỢNG -->
+  <div id="vt-modal" class="acc-modal" hidden>
+    <div class="acc-modal-backdrop"></div>
+    <div class="acc-modal-card" style="width:min(820px,96vw)">
+      <div class="form-header">
+        <h4>Khuôn biến thể</h4>
+        <button type="button" id="vt-close" class="icon-btn-close">✕</button>
+      </div>
+      <p class="acc-modal-note">
+        Khuôn prompt <b>chung</b> vẫn áp dụng đầy đủ. Đoạn dưới đây được ghim vào
+        <b>cuối</b> prompt để ghi đè luật "1 mockup = 1 image" — vì trang này chỉ
+        đính đúng một ảnh nhưng cần nhiều kết quả.
+        <code>{N}</code> là chỗ điền số ảnh, bắt buộc phải có.
+      </p>
+      <div class="form-group">
+        <textarea id="vt-text" rows="16" spellcheck="false"
+                  style="font-family:ui-monospace,Consolas,monospace;font-size:12px"></textarea>
+      </div>
+      <p class="acc-modal-note" id="vt-status" hidden></p>
+      <div class="form-actions">
+        <button type="button" id="vt-cancel" class="btn ghost sm">Đóng</button>
+        <button type="button" id="vt-save" class="btn primary sm">Lưu khuôn</button>
+      </div>
     </div>
   </div>
 

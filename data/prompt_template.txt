@@ -4,55 +4,70 @@
 Use the design concept described above as the core creative direction and apply it to every uploaded transparent PNG product mockup.
 
 IMAGE ROLES:
-- Image A is the style/design reference only.
-- Image B is the actual product mockup and must be preserved exactly.
+- Image A = style/design reference only.
+- Image B = actual tumbler mockup and must be preserved.
 
-PRIMARY GOAL:
-Create exactly ONE finished square product image by applying a full-wrap printed design based on the design concept onto the printable white body area of Image B only.
+GOAL:
+Create exactly 2 separate square mockup images using 1 single master design only.
+Use the exact same design for both mockups. Do not create 2 different designs.
 
-CRITICAL PRODUCT PRESERVATION:
-- Preserve Image B exactly as the base product.
-- Keep the exact tumbler shape, proportions, silhouette, perspective, camera angle, handle, lid, straw, metallic rim, lower tapered section, lighting, shadows, reflections, and overall structure.
-- Do not change the product form in any way.
-- Do not replace the tumbler with the shape or proportions of Image A.
+GENERAL RULES:
+- Preserve Image B’s exact tumbler shape, proportions, handle, lid, straw, metallic rim, tapered lower body, and overall structure.
+- Apply artwork only to the printable tumbler body.
+- Do not print on the handle, lid, straw, or metallic rim.
+- Keep all artwork fully inside the tumbler body silhouette.
+- The print must follow the tumbler curvature naturally like a real full-wrap print.
+- Use Image A only as inspiration for richness, premium collectible feel, color direction, texture, and overall style.
+- Do not copy Image A literally.
 
-PRINTABLE AREA CONTAINMENT — EXTREMELY IMPORTANT:
-- The design must stay fully contained INSIDE the visible white tumbler body of Image B.
-- All artwork must be clipped/masked to the exact printable body area.
-- No part of the design may extend outside the tumbler body silhouette.
-- Do not let any text, illustration, border, badge, banner, object, or decorative element spill outside the cup body.
-- Do not let the design cross beyond the left edge, right edge, top rim boundary, bottom body boundary, or into the open space around the handle.
-- Do not allow floating elements outside the tumbler.
-- Do not create any artwork that sticks out beyond the body shape.
-- Keep a safe margin near the outer contour so the design looks naturally printed and never appears cut off awkwardly.
-- The visible print must follow the cup curvature correctly, so the design looks wrapped around the tumbler rather than pasted on top.
+DESIGN CONSISTENCY:
+Use one single master design for:
+- tumbler in Mockup 1
+- box in Mockup 1
+- tumbler in Mockup 2
 
-DESIGN APPLICATION:
-- Apply the design ONLY to the white exterior body area of Image B.
-- The print should cover the full visible white body area in a realistic full-wrap style.
-- Do not place the design on the handle, lid, straw, or metallic rim.
-- Do not leave large empty white gaps unless the design concept specifically requires negative space.
-- The design must look like a premium print integrated into the product surface, not a sticker, label, or flat rectangle.
+Keep the same:
+- main artwork
+- typography
+- color palette
+- logos/badges
+- decorative elements
+- overall visual identity
 
-HOW TO USE IMAGE A:
-- Use Image A only as inspiration for decorative richness, layout energy, premium collectible feel, and overall artistic direction.
-- Do not copy Image A as a literal overlay.
-- Adapt the artwork so it fits naturally inside the exact printable area and curvature of Image B.
+3D / EMBOSSED LOOK:
+Give the artwork a premium raised / embossed / dimensional look.
+Keep it realistic and integrated into the surface.
+Do not distort the tumbler shape.
+
+MOCKUP 1:
+Create a clean product mockup image showing:
+- 1 tumbler based on Image B
+- 1 matching product box placed with it
+
+The box must look like a real premium retail box.
+Use only the text/content already available in the DESIGN CONCEPT for the box layout.
+Do not invent product specs, ingredients, components, or technical feature lists.
+Keep the box text simple and realistic, like a real package, using only the provided design text.
+
+MOCKUP 2:
+Create a lifestyle image showing the same tumbler design as Mockup 1.
+Keep the tumbler as the main focus.
+Use a realistic lifestyle environment matching the niche.
+
+VARIATION:
+- Mockup 1 = product-focused image with tumbler + box
+- Mockup 2 = lifestyle image
+- Both must use the exact same design
 
 BACKGROUND:
-- Create one realistic background scene that matches the design concept and niche.
-- The background should support the product but never overpower it.
-- Keep the tumbler as the clear hero.
-- Use realistic depth, contact shadows, and believable integration.
+Use realistic, polished backgrounds that match the design concept and niche.
+Keep the product as the hero.
+Use believable lighting, reflections, depth, and contact shadows.
 
 OUTPUT:
-- Generate exactly ONE image.
-- Aspect ratio must be 1:1.
-- Show only the product from Image B.
-- Preserve the exact product mockup.
-- Apply the design fully within the white body area only.
-- Ensure absolutely no design elements extend outside the tumbler body.
-- Make the result realistic, polished, premium, and suitable for e-commerce and product marketing.
-- Upload #1 → Output #1, Upload #2 → Output #2, Upload #3 → Output #3, and so on.
-- NEVER reorder, shuffle, or swap the output images.
-- The output sequence MUST exactly match the upload sequence.
+- Exactly 2 separate images
+- 1:1 aspect ratio
+- Same exact design in both images
+- Mockup 1 = tumbler + matching box
+- Mockup 2 = lifestyle image
+- Premium, realistic, polished, e-commerce ready

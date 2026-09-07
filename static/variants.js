@@ -289,21 +289,49 @@ function updateRunbar() {
 
 $("#var-count")?.addEventListener("input", updateRunbar);
 
-// Câu bổ sung ghim vào cuối prompt: khuôn prompt chung có luật "1 mockup = 1 ảnh",
-// mà ở đây chỉ đính đúng MỘT ảnh nên phải nói rõ là muốn N kết quả khác nhau.
+// Khuôn ghi đè số lượng ảnh, ghim vào CUỐI prompt.
+//
+// Khuôn prompt CHUNG vẫn áp dụng nguyên vẹn: nội dung prompt lưu trong
+// state.json đã được gói bằng nó từ lúc nhập CSV, nên mọi luật về nền, phong
+// cách, chất lượng... đều còn nguyên. Vấn đề là khuôn chung có luật "1 mockup =
+// 1 image", mà trang này chỉ đính đúng MỘT ảnh và cần N kết quả -> phải có một
+// đoạn ghi đè đứng SAU CÙNG.
+//
+// Đoạn đó nằm ở data/prompt_template_variants.txt (sửa được ngay trên trang này)
+// chứ không gõ cứng trong JS - để khi ChatGPT trả sai số lượng thì chỉnh câu chữ
+// là xong, không phải sửa code.
+let variantsTpl = "";
+
+async function loadVariantsTpl() {
+  try {
+    const d = await (await fetch("/api/prompt-template?kind=variants")).json();
+    const t = d.template || "";
+    // CHỐT AN TOÀN: server cũ chưa biết tham số `kind` sẽ trả về KHUÔN CHUNG.
+    // Ghim nguyên khuôn chung vào cuối prompt là prompt bị lặp gấp đôi và luật
+    // "1 mockup = 1 image" quay lại - hỏng đúng thứ đoạn này sinh ra để sửa.
+    // Khuôn biến thể bắt buộc có {N}, không có nghĩa là lấy nhầm file.
+    if (!t.includes("{N}")) {
+      variantsTpl = "";
+      console.warn("Khuôn biến thể không hợp lệ (thiếu {N}) - bỏ qua. "
+                 + "Server có thể đang chạy bản cũ, hãy khởi động lại.");
+      return;
+    }
+    variantsTpl = t;
+  } catch (e) {
+    variantsTpl = "";
+  }
+}
+
 function variantSuffix(n) {
-  return `\n\nOVERRIDE — NUMBER OF OUTPUTS:\n`
-    + `Only ONE mockup image is attached to this message. Ignore any earlier rule `
-    + `that says "1 mockup = 1 image".\n`
-    + `Generate EXACTLY ${n} separate finished images from that single mockup.\n`
-    + `- All ${n} images must use the SAME product and the SAME core design concept.\n`
-    + `- Each image must have a DIFFERENT background scene and composition.\n`
-    + `- Return ${n} separate images. Never combine them into one collage or grid.`;
+  if (!variantsTpl.trim()) return "";
+  return "\n\n" + variantsTpl.replaceAll("{N}", String(n));
 }
 
 async function startRun() {
   const it = pickedItem();
   if (!it || state.pickedPrompts.size === 0) return;
+
+  if (!variantsTpl) await loadVariantsTpl();   // chưa nạp kịp thì nạp ngay
 
   const profiles = allProfileNames();
   if (profiles.length === 0) {
@@ -353,6 +381,55 @@ $("#btn-stop")?.addEventListener("click", async () => {
     showToast("Đã dừng khẩn cấp", "warn");
   } catch (e) {
     showToast("Không dừng được", "error");
+  }
+});
+
+// ==========================================================================
+// 4b. Sửa khuôn ghi đè số lượng
+// ==========================================================================
+
+function tplStatus(msg, bad) {
+  const el = $("#vt-status");
+  if (!el) return;
+  el.hidden = !msg;
+  el.textContent = msg || "";
+  el.style.color = bad ? "var(--err)" : "";
+}
+
+$("#btn-var-tpl")?.addEventListener("click", async () => {
+  await loadVariantsTpl();
+  $("#vt-text").value = variantsTpl;
+  tplStatus("");
+  $("#vt-modal").hidden = false;
+  $("#vt-text").focus();
+});
+
+const closeVtModal = () => { $("#vt-modal").hidden = true; };
+$("#vt-close")?.addEventListener("click", closeVtModal);
+$("#vt-cancel")?.addEventListener("click", closeVtModal);
+
+$("#vt-save")?.addEventListener("click", async () => {
+  const text = $("#vt-text").value;
+  if (!text.includes("{N}")) {
+    return tplStatus("Khuôn phải chứa {N} - chỗ điền số ảnh cần tạo.", true);
+  }
+  const btn = $("#vt-save");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/prompt-template?kind=variants", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ template: text }),
+    });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "lưu thất bại");
+    variantsTpl = text;
+    showToast("Đã lưu khuôn biến thể", "success");
+    closeVtModal();
+  } catch (e) {
+    tplStatus(String(e.message || e), true);
+  } finally {
+    btn.disabled = false;
   }
 });
 
@@ -481,6 +558,7 @@ function startPolling() {
 loadImages();
 loadPrompts();
 loadProfiles();
+loadVariantsTpl();
 setInterval(loadProfiles, 15000);
 // Mở trang giữa lúc đang chạy dở thì bám vào theo dõi luôn.
 fetch("/api/jobs").then(r => r.json()).then(d => { if (d.active) startPolling(); })

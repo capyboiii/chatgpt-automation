@@ -207,18 +207,46 @@ def build_prompt(design: str) -> str:
     return tpl.replace(DESIGN_PLACEHOLDER, design.strip())
 
 
+# Khuôn RIÊNG cho trang Biến thể, ghim vào CUỐI prompt.
+#
+# Khuôn chung vẫn áp dụng nguyên vẹn - nội dung prompt lưu trong state.json đã
+# được gói bằng nó từ lúc nhập CSV. Nhưng khuôn chung có luật "1 mockup = 1
+# image", mà trang Biến thể chỉ đính đúng MỘT ảnh và cần N kết quả, nên phải có
+# một đoạn ghi đè đứng sau cùng. Để nó thành FILE (thay vì gõ cứng trong JS) để
+# còn sửa được câu chữ trên giao diện khi ChatGPT trả sai số lượng.
+VARIANTS_TEMPLATE_FILE = ROOT / "data" / "prompt_template_variants.txt"
+COUNT_PLACEHOLDER = "{N}"
+
+PROMPT_TEMPLATES = {
+    "main": (PROMPT_TEMPLATE_FILE, DESIGN_PLACEHOLDER),
+    "variants": (VARIANTS_TEMPLATE_FILE, COUNT_PLACEHOLDER),
+}
+
+
+def _tpl_slot(kind: str):
+    if kind not in PROMPT_TEMPLATES:
+        raise HTTPException(400, f"Khuôn '{kind}' không tồn tại.")
+    return PROMPT_TEMPLATES[kind]
+
+
 @app.get("/api/prompt-template")
-def get_prompt_template():
-    return {"template": load_prompt_template(),
-            "placeholder": DESIGN_PLACEHOLDER}
+def get_prompt_template(kind: str = "main"):
+    f, ph = _tpl_slot(kind)
+    try:
+        tpl = f.read_text(encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        tpl = ph
+    return {"template": tpl, "placeholder": ph, "kind": kind}
 
 
 @app.put("/api/prompt-template")
-def set_prompt_template(payload: dict):
+def set_prompt_template(payload: dict, kind: str = "main"):
+    f, ph = _tpl_slot(kind)
     tpl = (payload or {}).get("template") or ""
-    if DESIGN_PLACEHOLDER not in tpl:
-        raise HTTPException(400, f"Khuôn phải chứa dòng '{DESIGN_PLACEHOLDER}'.")
-    PROMPT_TEMPLATE_FILE.write_text(tpl, encoding="utf-8")
+    if ph not in tpl:
+        raise HTTPException(400, f"Khuôn phải chứa '{ph}'.")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(tpl, encoding="utf-8")
     return {"ok": True}
 
 
@@ -1822,9 +1850,12 @@ if __name__ == "__main__":
     # ghi file liên tục -> log rác + tốn CPU/IO trong lúc đang gen), và nguy hiểm hơn:
     # lỡ sửa 1 file .py giữa lượt gen là server restart, giết thread đang chạy và bỏ
     # lại cửa sổ Chrome mồ côi. Muốn dev thì: set DEV_RELOAD=1 rồi chạy.
+    # Cổng lấy từ biến môi trường PORT nếu có (để chạy được bản thứ hai cùng lúc
+    # mà không đụng cổng của bản đang dùng); không có thì vẫn là 8010 như cũ.
+    port = int(os.environ.get("PORT") or 8010)
     if os.environ.get("DEV_RELOAD") == "1":
-        uvicorn.run("server:app", host="127.0.0.1", port=8010, reload=True,
+        uvicorn.run("server:app", host="127.0.0.1", port=port, reload=True,
                     reload_dirs=[str(ROOT)], reload_includes=["*.py"],
                     reload_excludes=[".chrome-profiles/*", "data/*", "__pycache__/*"])
     else:
-        uvicorn.run(app, host="127.0.0.1", port=8010)
+        uvicorn.run(app, host="127.0.0.1", port=port)
