@@ -1152,6 +1152,37 @@ def _wipe_outputs(folders: set[str]) -> tuple[int, int]:
     return n_files, n_dirs
 
 
+@app.delete("/api/collections/{cid}/outputs")
+def clear_collection_outputs(cid: str):
+    """Xoá ảnh đã gen của MỘT bộ và đưa nó về hàng chờ.
+
+    Dùng khi một bộ ra ảnh không ưng: xoá đi rồi bấm chạy batch là nó được làm
+    lại. Không xoá thì `skip_done` thấy thư mục đã có ảnh và bỏ qua bộ đó."""
+    col = COLLECTIONS.get(cid)
+    if not col:
+        raise HTTPException(404, "Không tìm thấy bộ này.")
+    if RUN.get("active"):
+        raise HTTPException(409, "Đang có lượt gen chạy - dừng trước đã.")
+
+    folders = {j.get("folder", "") for j in col.get("jobs", [])}
+    n_files, n_dirs = _wipe_outputs(folders)
+
+    for j in col.get("jobs", []):
+        j["status"] = "pending"
+        j["error"] = None
+        j["worker"] = None
+    col["status"] = "pending"
+    col["error"] = None
+    col["worker"] = None
+    col.pop("ran_on", None)          # coi như chưa chạy ở đâu -> làm lại trọn bộ
+    save_collections_state()
+
+    log.info("Xoá kết quả bộ '%s': %d ảnh, %d thư mục.",
+             col.get("name"), n_files, n_dirs)
+    return {"ok": True, "deleted_files": n_files, "deleted_folders": n_dirs,
+            "collections": _public_collections()}
+
+
 @app.delete("/api/jobs")
 def clear_jobs(keep_files: bool = False):
     """Xoá kết quả: cả danh sách trên UI LẪN ảnh đã gen trong designs/.

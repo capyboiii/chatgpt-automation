@@ -1677,6 +1677,10 @@ function renderCollections(cols) {
             <span class="collection-stat-badge ${statusBadgeClass}">
               ${c.done_count}/${c.total_count} · ${statusText}
             </span>
+            <button type="button" class="icon-action danger" data-wipe="${c.id}"
+                    title="Xoá ảnh đã gen của bộ này để chạy lại">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
+            </button>
             <a href="/api/jobs/zip?cid=${c.id}" class="icon-action" title="Tải trọn bộ &quot;${esc(c.name)}&quot; (.zip)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </a>
@@ -1689,6 +1693,31 @@ function renderCollections(cols) {
       </div>
     `;
   }).join("");
+
+  container.querySelectorAll("[data-wipe]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const cid = btn.dataset.wipe;
+      const col = (state.collections || []).find(c => c.id === cid);
+      if (!confirm(`Xoá ảnh đã gen của bộ "${col ? col.name : cid}"?\n\n`
+                 + `Ảnh trong designs/ bị xoá vĩnh viễn. Bấm chạy batch lần sau `
+                 + `là bộ này được làm lại từ đầu.`)) return;
+      btn.disabled = true;
+      try {
+        const res = await fetch(`/api/collections/${cid}/outputs`, { method: "DELETE" });
+        const d = await res.json();
+        if (!res.ok) throw new Error(d.detail || "xoá thất bại");
+        showToast(`Đã xoá ${d.deleted_files} ảnh - bộ này sẽ được gen lại`, "info");
+        _sig.cols = null;                 // ép vẽ lại, khỏi bị chốt "không đổi"
+        state.collections = d.collections || state.collections;
+        renderCollections(state.collections);
+      } catch (e) {
+        showToast(`Không xoá được: ${e.message}`, "error");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  });
+
 
 }
 
