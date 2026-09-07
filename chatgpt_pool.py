@@ -1723,7 +1723,15 @@ class ChatGPTPool:
                 if not pending or quota or refused or self.stopped:
                     break
                 batch = pending[:1] if solo else pending
-                tpls = [Path(j["template"]) for j in batch]
+                # NHIỀU JOB CÙNG MỘT TEMPLATE = xin ChatGPT vài biến thể từ một
+                # ảnh gốc (trang "Biến thể"). Đính kèm thì chỉ gửi MỘT bản - gửi
+                # hai bản giống hệt nhau là ChatGPT hiểu thành hai sản phẩm khác
+                # nhau. Nhưng vẫn CHỜ ĐỦ `len(batch)` ảnh trả về.
+                tpls = []
+                for j in batch:
+                    t = Path(j["template"])
+                    if t not in tpls:
+                        tpls.append(t)
                 if slot.net:
                     slot.net.clear()          # chỉ tính ảnh của VÒNG NÀY
                     slot.net.armed = False
@@ -1737,7 +1745,9 @@ class ChatGPTPool:
                     # THỨ TỰ THẬT: đọc lại khung soạn xem ChatGPT sẽ nhận ảnh theo
                     # thứ tự nào. Trình duyệt upload song song nên nó hay khác thứ
                     # tự mình truyền vào - không đối chiếu là toàn bộ tên file lệch.
-                    if len(batch) > 1:
+                    # Chỉ đối chiếu được khi mỗi job một template khác nhau; ở chế
+                    # độ biến thể (nhiều job chung một ảnh) thì không có gì để ghép.
+                    if len(batch) > 1 and len(tpls) == len(batch):
                         names = await self._attached_names(page)
                         fixed = _match_order(batch, names)
                         if fixed is None:

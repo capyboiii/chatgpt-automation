@@ -2907,6 +2907,111 @@ button.pool-stat-pill:focus-visible {
   color: var(--muted);
 }
 
+/* ==========================================================================
+   TRANG BIẾN THỂ (variants.html) - chỉ dùng ở trang này
+   ========================================================================== */
+
+.var-img-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+.var-img {
+  position: relative;
+  padding: 0;
+  border: 2px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  animation: rise-in 0.3s var(--ease-out-soft) both;
+  animation-delay: calc(var(--i, 0) * 22ms);
+  transition: border-color 0.16s ease, transform 0.12s var(--ease-spring);
+}
+
+.var-img img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  display: block;
+  background: var(--bg-card-hover);
+  filter: grayscale(1);
+  opacity: 0.55;
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+
+.var-img:hover { transform: translateY(-2px); border-color: var(--border-strong); }
+.var-img:active { transform: scale(0.97); }
+
+.var-img.picked {
+  border-color: var(--accent);
+  animation: none;
+}
+
+.var-img.picked img { filter: none; opacity: 1; }
+
+.var-img-name {
+  display: block;
+  padding: 6px 8px;
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-top: 1px solid var(--border);
+}
+
+.var-img-tick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 700;
+  opacity: 0;
+  transform: scale(0.5);
+  transition: opacity 0.15s ease, transform 0.18s var(--ease-spring);
+}
+
+.var-img.picked .var-img-tick { opacity: 1; transform: scale(1); }
+
+/* Ô nhập số ảnh trên thanh chạy */
+.var-count-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.var-count-row input {
+  width: 54px;
+  padding: 5px 8px;
+  border-radius: var(--radius-xs);
+  border: 1.5px solid var(--border-strong);
+  background: var(--bg-card);
+  color: var(--text);
+  font-family: var(--f-mono);
+  font-size: 0.82rem;
+  text-align: center;
+}
+
+.var-count-row input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 /* --- người dùng tắt hiệu ứng thì tôn trọng --- */
 @media (prefers-reduced-motion: reduce) {
   *,

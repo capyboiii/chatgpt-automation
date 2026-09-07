@@ -1776,6 +1776,15 @@ def serve_design(name: str):
     return serve_output(name)
 
 
+@app.get("/variants")
+def variants_page():
+    """Trang BIẾN THỂ: 1 ảnh + 1 prompt -> nhiều ảnh, gộp chung một thư mục.
+
+    Tách hẳn khỏi trang chính để không đụng gì tới luồng cũ; phía sau vẫn dùng
+    đúng worker pool và đúng quy ước đặt tên thư mục."""
+    return _page("variants.html")
+
+
 @app.get("/")
 def index():
     """Trang chủ, có ĐÓNG DẤU PHIÊN BẢN theo giờ sửa file vào app.js/style.css.
@@ -1784,15 +1793,20 @@ def index():
     giữ nguyên bản cũ trong cache: giao diện mới đi kèm code cũ -> bấm nút không
     ăn, mà nhìn log server thì mọi thứ vẫn 200 OK. Đóng dấu tự động thì không
     bao giờ gặp lại chuyện đó."""
-    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    return _page("index.html")
+
+
+def _page(fname: str) -> HTMLResponse:
+    """Trả một trang HTML, đóng dấu phiên bản theo giờ sửa file cho mọi js/css."""
+    html = (STATIC_DIR / fname).read_text(encoding="utf-8")
 
     def stamp(m):
         name = m.group(1)
         f = STATIC_DIR / name
         v = int(f.stat().st_mtime) if f.exists() else 0
-        return f'{name}?v={v}'
+        return f"{name}?v={v}"
 
-    html = re.sub(r'(app\.js|style\.css)\?v=\d+', stamp, html)
+    html = re.sub(r'([\w.-]+\.(?:js|css))\?v=\d+', stamp, html)
     return HTMLResponse(html)
 
 
