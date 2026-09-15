@@ -4,8 +4,11 @@
     {
       "name": "mockup-forge",
       "runtimeExecutable": "python",
-      "runtimeArgs": ["server.py"],
-      "port": 8010
+      "runtimeArgs": [
+        "server.py"
+      ],
+      "port": 8010,
+      "autoPort": true
     }
   ]
 }

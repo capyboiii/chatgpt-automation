@@ -279,6 +279,47 @@ def _fill_otp(page, code: str) -> bool:
     return False
 
 
+# Câu báo sai thông tin: gặp là dừng luôn, bấm lại bao nhiêu cũng vô ích.
+WRONG_CRED_HINTS = (
+    "incorrect email address or password", "wrong email or password",
+    "incorrect password", "invalid password", "sai mật khẩu",
+    "email hoặc mật khẩu không đúng", "mật khẩu không chính xác",
+)
+
+
+def _stuck_step(page) -> str:
+    """Đang kẹt ở bước nào: 'password' / 'email' / ''."""
+    try:
+        url = page.url or ""
+    except Exception:  # noqa: BLE001
+        return ""
+    if "/log-in/password" in url or "/password" in url:
+        return "password"
+    if "/log-in" in url and "password" not in url:
+        return "email"
+    return ""
+
+
+def _resubmit(page, selectors: list[str], value: str) -> bool:
+    """Gửi lại form đang đứng yên: điền lại nếu ô bị trống, rồi Enter ngay trong
+    ô (chắc hơn bấm nút - nút hay bị lớp phủ/Turnstile chặn), không ăn thì bấm
+    Continue. `value` không bao giờ ghi ra log."""
+    for sel in selectors:
+        try:
+            loc = page.locator(sel).first
+            if not loc.count() or not loc.is_visible():
+                continue
+            if not (loc.input_value() or "").strip():
+                loc.fill(value)
+            loc.focus()
+            loc.press("Enter")
+            time.sleep(1.5)
+            return True
+        except Exception:  # noqa: BLE001
+            continue
+    return _click_text(page, TXT_CONTINUE, timeout=4_000, allow_submit=True)
+
+
 def auto_login(page, creds: dict, box: dict, is_logged_in, timeout: int = 240) -> bool:
     """Điền email -> mật khẩu -> mã 2FA. True = đã vào được ChatGPT.
 
@@ -327,6 +368,8 @@ def auto_login(page, creds: dict, box: dict, is_logged_in, timeout: int = 240) -
     otp_tries = 0
     last_code = ""
     last_check = 0.0
+    resubmits = 0
+    stuck_since = None
     while time.time() < deadline:
         # is_logged_in gọi mạng (/backend-api/me) -> giãn ra ~6s/lần thay vì 2s,
         # khỏi bắn cả trăm request trong lúc chờ.
@@ -346,6 +389,40 @@ def auto_login(page, creds: dict, box: dict, is_logged_in, timeout: int = 240) -
             time.sleep(3.0)
             continue
         box["needs_human"] = False
+
+        # KẸT Ở TRANG EMAIL/MẬT KHẨU: trước đây chỉ bấm Continue đúng một lần, cú
+        # bấm bị nuốt (nút chưa bật kịp, Cloudflare kiểm tra ngầm, máy chậm vì mở
+        # nhiều cửa sổ) là trang đứng yên tới hết giờ. Giờ đứng quá 8s thì gửi lại.
+        step = _stuck_step(page)
+        if step and not _has_otp(page):
+            try:
+                body = (page.inner_text("body") or "").lower()
+            except Exception:  # noqa: BLE001
+                body = ""
+            if any(h in body for h in WRONG_CRED_HINTS):
+                box["error"] = "Sai email hoặc mật khẩu."
+                box["snapshot"] = snapshot(page)
+                return False
+            now = time.time()
+            if stuck_since is None:
+                stuck_since = now
+            elif now - stuck_since >= 8.0:
+                if resubmits >= 5:
+                    box["error"] = (f"Đứng ở bước {step} sau {resubmits} lần gửi lại - "
+                                    "có thể bị chặn, cần xem cửa sổ Chrome.")
+                    box["snapshot"] = snapshot(page)
+                    return False
+                resubmits += 1
+                box["phase"] = step
+                log.info("Đứng ở bước %s - gửi lại lần %d.", step, resubmits)
+                if step == "password":
+                    _resubmit(page, SEL_PASSWORD, creds["password"])
+                else:
+                    _resubmit(page, SEL_EMAIL, creds["email"])
+                stuck_since = time.time()
+            time.sleep(2.0)
+            continue
+        stuck_since = None
 
         if _has_otp(page):
             if not creds.get("totp"):

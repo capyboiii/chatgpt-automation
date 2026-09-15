@@ -586,6 +586,19 @@ def _classify(text: str) -> tuple[str, str, str]:
     return "", flat[-160:].strip(), ""
 
 
+def _next_index(folder: Path) -> int:
+    """Số thứ tự kế tiếp cho ảnh trong thư mục chế độ CSV (1.png, 2.png, ...).
+
+    Đếm tiếp từ số lớn nhất đang có chứ không bắt đầu lại từ 1 - chạy lại một dòng
+    CSV vào đúng thư mục cũ thì ảnh mới nối đuôi, không đè mất ảnh cũ."""
+    n = 0
+    if folder.is_dir():
+        for f in folder.iterdir():
+            if f.is_file() and f.stem.isdigit():
+                n = max(n, int(f.stem))
+    return n + 1
+
+
 def _is_dead(err: Exception) -> bool:
     """Lỗi loại 'tab/trình duyệt đã chết' -> retry trên tab này vô nghĩa."""
     m = str(err).lower()
@@ -744,6 +757,12 @@ class ChatGPTPool:
                 channel="chrome",
                 viewport={"width": 1400, "height": 950},
                 args=["--disable-blink-features=AutomationControlled",
+                      # Windows ngừng vẽ cửa sổ bị che -> nhiều tài khoản chạy
+                      # song song là tab bị đè không render, gen đứng. Tắt hết.
+                      "--disable-features=CalculateNativeWinOcclusion",
+                      "--disable-backgrounding-occluded-windows",
+                      "--disable-renderer-backgrounding",
+                      "--disable-background-timer-throttling",
                       "--no-first-run", "--no-default-browser-check"],
             )
         except Exception as e:  # noqa: BLE001
@@ -1573,6 +1592,207 @@ class ChatGPTPool:
             f"đứng im {int(self.no_progress_timeout)}s không ra thêm ảnh nào" if stuck
             else f"quá {int(budget)}s vẫn chưa có ảnh")
 
+    async def _wait_all_images(self, page: Page, before: set,
+                               net: "_ImageNet | None" = None) -> list[_Shot]:
+        """Chờ ChatGPT làm XONG rồi lấy MỌI ảnh nó trả, không biết trước số lượng.
+
+        Khác _wait_images ở chỗ không có `want`: chốt khi ChatGPT hết bận VÀ danh
+        sách ảnh đứng yên đủ `settle_seconds` - tức là nó đã trả lời xong hẳn."""
+        loop = asyncio.get_event_loop()
+        stale = await self._tail(page)
+
+        def best(srcs) -> list[_Shot]:
+            netted = net.shots() if net else []
+            dom = [_Shot(u, None, 0.0) for u in srcs if u not in before]
+            return netted if len(netted) >= len(dom) else dom
+
+        def arm(busy: bool) -> None:
+            if busy and net is not None and not net.armed:
+                net.clear()
+                net.armed = True
+
+        # pha 1: chờ ChatGPT bắt đầu trả lời
+        start_deadline = loop.time() + 30
+        next_diag = loop.time() + 8
+        started = False
+        while loop.time() < start_deadline:
+            busy, srcs = await self._poll(page)
+            arm(busy)
+            if busy or best(srcs):
+                started = True
+                break
+            if loop.time() >= next_diag:
+                await self._raise_if_bad(page, stale)
+                next_diag = loop.time() + 8
+            await page.wait_for_timeout(700)
+        if not started:
+            await self._raise_if_bad(page, stale)
+            raise NoImage("gửi xong nhưng ChatGPT không phản hồi")
+
+        # pha 2: chờ xong hẳn.
+        # Một ảnh ChatGPT vẽ có khi mất 3-5 phút mà KHÔNG hiện gì cho tới lúc xong,
+        # nên "không có ảnh mới" không có nghĩa là treo. Còn BẬN (nút Stop còn đó)
+        # là còn sống -> cứ gia hạn; chỉ khi hết bận mà vẫn im mới tính giờ chết.
+        # Trần cứng rộng hơn trang chính vì một phiên có thể ra nhiều ảnh liên tiếp.
+        deadline = loop.time() + max(self.batch_timeout, 2400)
+        idle_deadline = loop.time() + self.no_progress_timeout
+        seen_n = 0
+        ready_since = None
+        ready_keys = None
+        quiet_since = None
+        next_diag = 0.0
+        got: list[_Shot] = []
+        while loop.time() < deadline and loop.time() < idle_deadline:
+            busy, srcs = await self._poll(page)
+            arm(busy)
+            got = best(srcs)
+            now = loop.time()
+
+            if len(got) > seen_n or busy:       # ra thêm ảnh HOẶC còn bận = còn sống
+                seen_n = len(got)
+                idle_deadline = now + self.no_progress_timeout
+
+            if not busy and got:
+                keys = tuple(sh.url for sh in got)
+                if ready_since is None or keys != ready_keys:
+                    ready_since, ready_keys = now, keys
+                elif now - ready_since >= self.settle_seconds:
+                    return await self._pick_all(page, got)
+            else:
+                ready_since = None
+
+            if busy:
+                quiet_since = None
+            else:
+                if quiet_since is None:
+                    quiet_since = now
+                    next_diag = now + 3
+                if now >= next_diag:
+                    try:
+                        await self._raise_if_bad(page, stale)
+                    except QuotaExceeded as e:
+                        raise QuotaExceeded(str(e), got) from None
+                    except NoImage:
+                        if not got:
+                            raise
+                    next_diag = now + 8
+                if not got and now - quiet_since > 25:
+                    raise NoImage("ChatGPT trả lời xong nhưng không có ảnh")
+            await page.wait_for_timeout(1_000)
+
+        if got:
+            return await self._pick_all(page, got)
+        await self._raise_if_bad(page, stale)
+        raise NoImage("hết giờ vẫn chưa có ảnh")
+
+    async def _pick_all(self, page: Page, got: list[_Shot]) -> list[_Shot]:
+        """Lấy đúng những ảnh ĐANG HIỂN THỊ, theo thứ tự hiển thị (bỏ bản dựng dở)."""
+        for attempt in range(4):
+            dom = await self._screen_images(page)
+            if dom:
+                picked = await self._from_screen(page, got, len(dom))
+                if picked:
+                    return picked
+            if attempt < 3:
+                await page.wait_for_timeout(1_200)
+        return [sh for sh in got if sh.data] or got
+
+    async def _run_free(self, slot: _Slot, page: Page, col: dict, jobs: list[dict],
+                        seen: set, emit, on_update: UpdateCb = None) -> bool:
+        """Chạy MỘT dòng CSV: gửi prompt thô (không khuôn, không ảnh đính kèm), lấy
+        hết ảnh ChatGPT trả về, lưu vào thư mục của dòng đó thành 1.png, 2.png, ..."""
+        job = jobs[0]
+        folder_abs = Path(job["dest"]).parent
+        prompt = col.get("prompt") or job.get("prompt", "")
+        quota = refused = None
+        last_err: Exception | None = None
+
+        for round_no in range(1, self.max_retries + 2):
+            if self.stopped:
+                break
+            job["status"] = "running"
+            job["worker"] = slot.label
+            job["error"] = None
+            await emit(job)
+
+            if round_no > 1:                    # lượt trước hỏng -> chat mới
+                try:
+                    await self._new_chat(page)
+                    seen = set(await self._collect(page))
+                except Exception as e:  # noqa: BLE001
+                    last_err = e
+                    if _is_dead(e):
+                        return await self._handoff(
+                            slot, col, f"tab/trình duyệt đã chết ({e})", on_update)
+                    continue
+
+            if slot.net:
+                slot.net.clear()
+                slot.net.armed = False
+            imgs: list[_Shot] = []
+            try:
+                await self._send(page, prompt)
+                imgs = await self._wait_all_images(page, seen, slot.net)
+            except QuotaExceeded as e:
+                quota = str(e)
+                imgs = e.images or []
+                log.error("[%s] %s", slot.label, quota)
+            except Refused as e:
+                refused = str(e)
+                log.error("[%s] '%s': %s", slot.label, col.get("name"), refused)
+                break
+            except Exception as e:  # noqa: BLE001
+                last_err = e
+                log.warning("[%s] '%s' lượt %d lỗi: %s",
+                            slot.label, col.get("name"), round_no, e)
+                if _is_dead(e):
+                    return await self._handoff(
+                        slot, col, f"tab/trình duyệt đã chết ({e})", on_update)
+
+            if imgs:
+                start = _next_index(folder_abs)
+                urls = []
+                for k, sh in enumerate(imgs):
+                    dest = folder_abs / f"{start + k}.png"
+                    try:
+                        ok = await self._save(page, sh, dest)
+                    except Exception as e:  # noqa: BLE001
+                        ok, last_err = False, e
+                    if ok:
+                        urls.append(f"/files/outputs/{job['folder']}/{dest.name}")
+                if urls:
+                    job["status"] = "done"
+                    job["error"] = None
+                    job["results"] = urls
+                    job["result_url"] = urls[0]
+                    job["dest"] = str(folder_abs / urls[0].rsplit("/", 1)[-1])
+                    await emit(job)
+                    col["status"] = "done"
+                    log.info("[%s] '%s': lưu %d ảnh vào %s.",
+                             slot.label, col.get("name"), len(urls), job["folder"])
+                    return True
+
+            if quota:
+                break
+            await asyncio.sleep(2)
+
+        if self.stopped:
+            job["status"] = col["status"] = "paused"
+            job["error"] = "Dừng khẩn cấp"
+            await emit(job)
+            return False
+
+        job["status"] = "failed"
+        job["error"] = quota or refused or (
+            str(last_err) if last_err else "ChatGPT không trả ảnh nào")
+        await emit(job)
+        col["status"] = "failed"
+        col["error"] = job["error"]
+        if quota:
+            self.exhausted[slot.profile] = quota
+            return False
+        return True
+
     async def _save(self, page: Page, shot: _Shot, dest: Path) -> bool:
         """Lưu ảnh: bắt được từ mạng thì ghi thẳng bytes, không thì mới tải lại."""
         if shot.data:
@@ -1682,6 +1902,11 @@ class ChatGPTPool:
         await self._set_thinking(page)
 
         seen = set(await self._collect(page))
+
+        # Chế độ CSV chỉ-chữ: không đính ảnh, không biết trước ChatGPT trả mấy ảnh.
+        if col.get("free"):
+            return await self._run_free(slot, page, col, pending_jobs, seen,
+                                        emit, on_update)
 
         # CẢ BỘ trong MỘT tin nhắn, một khung chat. Không tách lô, không gom nhóm.
         # Khuôn prompt yêu cầu ChatGPT "coi mọi mockup trong cùng một request là

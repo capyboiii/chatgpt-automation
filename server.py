@@ -852,6 +852,8 @@ async def resume_collections(payload: dict):
 
     incomplete_cols = []
     for c in list(COLLECTIONS.values()):
+        if c.get("free"):          # bộ trang CSV không có template để dựng lại
+            continue
         c_jobs = c.get("jobs", [])
         for j in c_jobs:
             dest = Path(j.get("dest", ""))
@@ -927,9 +929,11 @@ def _public_collections() -> list[dict]:
             has = Path(j["dest"]).exists()
             c_jobs.append({
                 "id": j["id"],
-                "template_name": j["template_name"],
-                "template_url": j["template_url"],
-                "prompt_name": j["prompt_name"],
+                "template_name": j.get("template_name", ""),
+                "template_url": j.get("template_url", ""),
+                "prompt_name": j.get("prompt_name", ""),
+                "folder": j.get("folder", ""),
+                "results": j.get("results") or [],
                 "status": j["status"],
                 "error": j.get("error"),
                 "worker": j.get("worker"),
@@ -942,6 +946,7 @@ def _public_collections() -> list[dict]:
             "name": c["name"],
             "prompt_name": c["prompt_name"],
             "prompt_text": c.get("prompt", ""),
+            "free": bool(c.get("free")),
             "status": c.get("status", "pending"),
             "worker": c.get("worker"),
             "error": c.get("error"),
@@ -983,6 +988,22 @@ def get_jobs():
     }
 
 
+def _job_files(j: dict) -> list[Path]:
+    """File ảnh của một job. Job trang CSV có nhiều ảnh (danh sách `results`), job
+    thường chỉ có một (`dest`)."""
+    res = j.get("results") or []
+    if res:
+        out = []
+        for u in res:
+            rel = u.split("/files/outputs/", 1)[-1]
+            p = OUTPUTS / rel
+            if p.exists():
+                out.append(p)
+        return out
+    p = Path(j.get("dest", ""))
+    return [p] if p.exists() else []
+
+
 @app.get("/api/jobs/zip")
 def download_jobs_zip(cid: str | None = None):
     import io
@@ -995,8 +1016,7 @@ def download_jobs_zip(cid: str | None = None):
             c = COLLECTIONS[cid]
             c_slug = _design_slug(c.get("name") or "collection")
             for j in c.get("jobs", []):
-                p = Path(j["dest"])
-                if p.exists():
+                for p in _job_files(j):
                     rel_folder = j.get("folder") or f"{c_slug}/{_mockup_slug(j.get('template_name', 'mockup'))}"
                     zf.write(p, arcname=f"designs/{rel_folder}/{p.name}")
                     count += 1
@@ -1005,8 +1025,7 @@ def download_jobs_zip(cid: str | None = None):
             for c in COLLECTIONS.values():
                 c_slug = _design_slug(c.get("name") or "collection")
                 for j in c.get("jobs", []):
-                    p = Path(j["dest"])
-                    if p.exists():
+                    for p in _job_files(j):
                         rel_folder = j.get("folder") or f"{c_slug}/{_mockup_slug(j.get('template_name', 'mockup'))}"
                         zf.write(p, arcname=f"designs/{rel_folder}/{p.name}")
                         count += 1
@@ -1274,6 +1293,41 @@ def _save_login_debug(name: str, snap: dict | None) -> None:
         log.warning("Không lưu được ảnh chụp trang: %s", e)
 
 
+def _open_chatgpt(ctx, page, tries: int = 3, timeout_ms: int = 45_000):
+    """Mở chatgpt.com, KHÔNG bỏ cuộc sau một lần tải hỏng. Trả về page dùng được.
+
+    Bật nhiều Chrome cùng lúc thì có tab tải mãi không xong (cả chục trình duyệt
+    cùng kéo chatgpt.com + Cloudflare, hoặc tab đầu của profile kẹt từ phiên
+    trước). Trước đây goto một lần, quá 90s là bỏ luôn tài khoản -> "không render
+    nổi". Giờ: chỉ chờ tới lúc trang BẮT ĐẦU về (commit), hỏng thì bỏ tab đó mở
+    tab mới thử lại - tab kẹt hiếm khi tự hồi, tab mới thì gần như luôn chạy."""
+    last = None
+    for i in range(1, tries + 1):
+        try:
+            page.goto("https://chatgpt.com/", wait_until="commit", timeout=timeout_ms)
+            try:                                # có DOM thì tốt, chưa có cũng không sao
+                page.wait_for_load_state("domcontentloaded", timeout=30_000)
+            except Exception:  # noqa: BLE001
+                pass
+            return page
+        except Exception as e:  # noqa: BLE001
+            last = e
+            log.warning("Mở chatgpt.com lần %d/%d lỗi: %s", i, tries, str(e).splitlines()[0])
+            if i == tries:
+                break
+            try:
+                fresh = ctx.new_page()
+                try:
+                    page.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                page = fresh
+            except Exception:  # noqa: BLE001
+                pass
+            time.sleep(3)
+    raise last
+
+
 def _login_worker(name: str, udir: Path, box: dict):
     """Mở Chrome (sync Playwright) cho 1 profile để người dùng đăng nhập ChatGPT.
     Giữ cửa sổ mở tới khi UI bấm 'Xong' (set stop), rồi kiểm tra + đóng."""
@@ -1284,9 +1338,15 @@ def _login_worker(name: str, udir: Path, box: dict):
                 user_data_dir=str(udir), headless=False, channel="chrome",
                 viewport={"width": 1400, "height": 950},
                 args=["--disable-blink-features=AutomationControlled",
+                      # Windows ngừng vẽ cửa sổ bị che -> mở nhiều Chrome cùng lúc
+                      # là mấy cái bị đè không render, đăng nhập đứng. Tắt hết.
+                      "--disable-features=CalculateNativeWinOcclusion",
+                      "--disable-backgrounding-occluded-windows",
+                      "--disable-renderer-backgrounding",
+                      "--disable-background-timer-throttling",
                       "--no-first-run", "--no-default-browser-check"])
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=90_000)
+            page = _open_chatgpt(ctx, page)
 
             # Lấy credential ra rồi XOÁ khỏi box ngay: box còn bị API status đọc tới.
             creds = box.pop("creds", None)
@@ -1502,11 +1562,16 @@ def _bulk_one(idx: int, name: str, creds: dict, total: int, sem: threading.Semap
                     user_data_dir=str(udir), headless=False, channel="chrome",
                     no_viewport=True,
                     args=["--disable-blink-features=AutomationControlled",
+                      # Windows ngừng vẽ cửa sổ bị che -> mở nhiều Chrome cùng lúc
+                      # là mấy cái bị đè không render, đăng nhập đứng. Tắt hết.
+                      "--disable-features=CalculateNativeWinOcclusion",
+                      "--disable-backgrounding-occluded-windows",
+                      "--disable-renderer-backgrounding",
+                      "--disable-background-timer-throttling",
                           "--no-first-run", "--no-default-browser-check",
                           *_tile(idx, total)])
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                page.goto("https://chatgpt.com/", wait_until="domcontentloaded",
-                          timeout=90_000)
+                page = _open_chatgpt(ctx, page)
                 ok = auth_login.auto_login(page, creds, box, _check_logged_in)
                 if ok:
                     with _PROF_LOCK:      # đọc-sửa-ghi config.yaml phải một mình
@@ -1716,10 +1781,16 @@ def check_profile_login(name: str):
                 user_data_dir=str(udir), headless=False, channel="chrome",
                 viewport={"width": 1280, "height": 800},
                 args=["--disable-blink-features=AutomationControlled",
+                      # Windows ngừng vẽ cửa sổ bị che -> mở nhiều Chrome cùng lúc
+                      # là mấy cái bị đè không render, đăng nhập đứng. Tắt hết.
+                      "--disable-features=CalculateNativeWinOcclusion",
+                      "--disable-backgrounding-occluded-windows",
+                      "--disable-renderer-backgrounding",
+                      "--disable-background-timer-throttling",
                       "--no-first-run", "--no-default-browser-check"]
             )
             page = ctx.pages[0] if ctx.pages else ctx.new_page()
-            page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=25_000)
+            page = _open_chatgpt(ctx, page)
             time.sleep(1.0)
             logged_in = _check_logged_in(page)
             ctx.close()
@@ -1776,6 +1847,144 @@ def serve_design(name: str):
     return serve_output(name)
 
 
+@app.post("/api/csvrun/start")
+async def csvrun_start(file: UploadFile):
+    """Trang CSV: nhập CSV là CHẠY LUÔN.
+
+    Mỗi dòng = một phiên chat, gửi nguyên văn cột PROMPT (KHÔNG gói khuôn prompt,
+    KHÔNG đính ảnh). ChatGPT trả bao nhiêu ảnh thì lấy hết, lưu vào
+    designs/<Topic>__<Style>/1.png, 2.png, ... Dòng nào thư mục đã có ảnh thì bỏ
+    qua, giống cơ chế bỏ qua ảnh đã có của trang chính."""
+    global ACTIVE_POOL, ACTIVE_LOOP
+    import csv
+    import io as _io
+
+    raw = (await file.read()).decode("utf-8-sig", errors="replace")
+    try:
+        rows = list(csv.DictReader(_io.StringIO(raw)))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"Không đọc được CSV: {e}")
+    if not rows:
+        raise HTTPException(400, "CSV rỗng.")
+
+    def col(row: dict, *names: str) -> str:
+        for k, v in row.items():
+            if k and k.strip().lower() in names:
+                return (v or "").strip()
+        return ""
+
+    built, skipped_empty, skipped_done = [], 0, 0
+    for i, row in enumerate(rows, 1):
+        text = col(row, "prompt", "design prompt", "noi dung", "nội dung")
+        if not text:
+            skipped_empty += 1
+            continue
+        topic = col(row, "topic", "character", "chu de", "chủ đề")
+        style = col(row, "style", "design", "phong cach", "phong cách")
+        name = topic or col(row, "name", "ten", "tên") or f"Dong {i}"
+        # Như quy ước cũ <Loại>__<Topic>__<Design>, nhưng không có ảnh mockup nên
+        # không có phần loại sản phẩm.
+        folder = f"{_name_part(topic or name, 'Topic')}__{_name_part(style, 'Design')}"
+        if _folder_has_image(folder):
+            skipped_done += 1
+            continue
+        jid = uuid.uuid4().hex[:8]
+        built.append({
+            "id": uuid.uuid4().hex[:8],
+            "name": _safe_folder_name(name),
+            "prompt": text,
+            "prompt_name": name,
+            "free": True,
+            "status": "pending",
+            "worker": None,
+            "error": None,
+            "jobs": [{
+                "id": jid,
+                "template": "",
+                "template_name": "",
+                "template_url": "",
+                "prompt": text,
+                "prompt_name": name,
+                "dest": str(OUTPUTS / folder / "1.png"),
+                "result_url": f"/files/outputs/{folder}/1.png",
+                "folder": folder,
+                "results": [],
+                "status": "pending",
+                "error": None,
+            }],
+        })
+
+    if not built:
+        if skipped_done:
+            raise HTTPException(409, f"Cả {skipped_done} dòng đều đã có ảnh - không còn gì để chạy.")
+        raise HTTPException(400, "Không dòng nào có cột PROMPT.")
+
+    # Kiểm tài khoản SAU khi đọc CSV: file hỏng thì báo lỗi file trước, khỏi bắt
+    # người dùng đi thêm tài khoản rồi mới biết CSV sai cột.
+    base = _profiles_dir()
+    all_profs = [p["name"] for p in _get_profiles()]
+    profiles = [n for n in all_profs if (base / n).exists()] or all_profs
+    if not profiles:
+        raise HTTPException(400, "Chưa có tài khoản ChatGPT nào.")
+
+    is_running = (RUN["active"] and ACTIVE_POOL is not None
+                  and ACTIVE_LOOP is not None and not ACTIVE_LOOP.is_closed())
+
+    if is_running:
+        for c in built:
+            COLLECTIONS[c["id"]] = c
+            for j in c["jobs"]:
+                JOBS[j["id"]] = j
+        fut = asyncio.run_coroutine_threadsafe(
+            _enqueue_on_pool(ACTIVE_POOL, built, profiles), ACTIVE_LOOP)
+        try:
+            accepted = fut.result(timeout=10)
+        except Exception as e:  # noqa: BLE001
+            accepted = False
+            log.warning("Nạp thêm dòng CSV lỗi: %s", e)
+        if not accepted:
+            for c in built:
+                COLLECTIONS.pop(c["id"], None)
+                for j in c["jobs"]:
+                    JOBS.pop(j["id"], None)
+            raise HTTPException(409, "Lượt gen đang chạy không nhận thêm. Thử lại sau.")
+    else:
+        COLLECTIONS.clear()
+        JOBS.clear()
+        RUN["mode"] = "bulk"
+        RUN["exhausted"] = {}
+        RUN["warnings"] = []
+        RUN["stopped"] = False
+        RUN["profiles"] = profiles
+        for c in built:
+            COLLECTIONS[c["id"]] = c
+            for j in c["jobs"]:
+                JOBS[j["id"]] = j
+        threading.Thread(target=_run_pool_thread,
+                         kwargs={"collections": built, "profiles": profiles},
+                         daemon=True).start()
+
+    save_collections_state()
+    log.info("Trang CSV: chạy %d dòng (bỏ %d dòng trống, %d dòng đã có ảnh).",
+             len(built), skipped_empty, skipped_done)
+    return {"started": len(built), "skipped_empty": skipped_empty,
+            "skipped_done": skipped_done, "profiles": profiles,
+            "enqueued": is_running}
+
+
+@app.get("/csv")
+def csv_page():
+    """Trang CSV chạy thẳng (đóng dấu phiên bản js/css như trang chủ)."""
+    html = (STATIC_DIR / "csvrun.html").read_text(encoding="utf-8")
+
+    def stamp(m):
+        f = STATIC_DIR / m.group(1)
+        return f"{m.group(1)}?v={int(f.stat().st_mtime) if f.exists() else 0}"
+
+    html = re.sub(r'(csvrun\.js|style\.css)\?v=\d+', stamp, html)
+    return HTMLResponse(html)
+
+
 @app.get("/")
 def index():
     """Trang chủ, có ĐÓNG DẤU PHIÊN BẢN theo giờ sửa file vào app.js/style.css.
@@ -1808,9 +2017,12 @@ if __name__ == "__main__":
     # ghi file liên tục -> log rác + tốn CPU/IO trong lúc đang gen), và nguy hiểm hơn:
     # lỡ sửa 1 file .py giữa lượt gen là server restart, giết thread đang chạy và bỏ
     # lại cửa sổ Chrome mồ côi. Muốn dev thì: set DEV_RELOAD=1 rồi chạy.
+    # Cổng lấy từ biến môi trường PORT nếu có (chạy được bản thứ hai song song để
+    # thử mà không đụng bản đang dùng); không có thì vẫn 8010 như cũ.
+    port = int(os.environ.get("PORT") or 8010)
     if os.environ.get("DEV_RELOAD") == "1":
-        uvicorn.run("server:app", host="127.0.0.1", port=8010, reload=True,
+        uvicorn.run("server:app", host="127.0.0.1", port=port, reload=True,
                     reload_dirs=[str(ROOT)], reload_includes=["*.py"],
                     reload_excludes=[".chrome-profiles/*", "data/*", "__pycache__/*"])
     else:
-        uvicorn.run(app, host="127.0.0.1", port=8010)
+        uvicorn.run(app, host="127.0.0.1", port=port)
