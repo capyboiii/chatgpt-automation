@@ -7,6 +7,7 @@ prompt -> Gen. Backend chạy ChatGPTPool (đa tab) ở nền, poll status trả
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import logging
 import math
@@ -19,7 +20,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 import auth_login
@@ -68,6 +69,8 @@ RUN = {
     "fleet": {},                         # profile -> {status, collection, collection_name, prompt_name}
     "exhausted": {},                     # profile -> lý do hết lượt
     "warnings": [],                      # cảnh báo
+    "thinking_level": None,              # mức cấu hình cho lượt hiện tại
+    "thinking_state": {},                 # profile -> confirmed | warning | default
     "stopped": False                     # cờ dừng khẩn cấp
 }
 
@@ -333,6 +336,43 @@ def _prompt_by_id(pid: str) -> dict | None:
 
 ACTIVE_POOL: ChatGPTPool | None = None
 ACTIVE_LOOP: asyncio.AbstractEventLoop | None = None
+_POOL_START_LOCK = threading.Lock()
+_POOL_READY = threading.Event()
+
+
+def _on_pool_job_update(job: dict) -> None:
+    """Ghi ngay từng kết quả, kể cả khi các bộ khác vẫn còn trong hàng đợi."""
+    try:
+        _publish_regeneration_update(job)
+    finally:
+        save_collections_state()
+
+
+def _publish_regeneration_update(job: dict) -> None:
+    """Publish a replacement only after its separate regeneration job succeeds."""
+    source_id = job.get("source_job_id")
+    if not source_id:
+        return
+    original = JOBS.get(source_id)
+    if not original:
+        return
+    original["regen_status"] = job.get("status")
+    original["regen_error"] = job.get("error")
+    if job.get("status") != "done" or not job.get("results"):
+        return
+    current = list(original.get("results") or [])
+    old_url = job.get("source_image_url")
+    if old_url not in current:
+        if all(url in current for url in job["results"]):
+            return
+        original["regen_status"] = "failed"
+        original["regen_error"] = "Ảnh gốc đã thay đổi; ảnh mới được giữ ở lượt gen lại riêng."
+        return
+    index = current.index(old_url)
+    current[index:index + 1] = job["results"]
+    original["results"] = current
+    original["result_url"] = current[0]
+    original["regen_error"] = None
 
 
 async def _run_pool(jobs: list[dict] | None = None,
@@ -361,6 +401,8 @@ async def _run_pool(jobs: list[dict] | None = None,
     RUN["fleet"] = {p: {"status": "starting", "collection": None, "collection_name": None} for p in profs}
     RUN["exhausted"] = {}
     RUN["warnings"] = []
+    RUN["thinking_level"] = str(cfg.get("run", {}).get("thinking", "vừa"))
+    RUN["thinking_state"] = {}
 
     def on_fleet(p_name: str, info: dict):
         RUN["fleet"][p_name] = info
@@ -371,9 +413,12 @@ async def _run_pool(jobs: list[dict] | None = None,
         ACTIVE_LOOP = asyncio.get_running_loop()
         RUN["exhausted"] = pool.exhausted      # dict dùng chung, UI poll thấy ngay
         RUN["warnings"] = pool.warnings        # vd: DOM ChatGPT đổi cấu trúc
+        RUN["thinking_state"] = pool.thinking_state
         async with pool:
             if collections:
-                await pool.run_collections(collections, on_update=lambda j: None, on_fleet_update=on_fleet)
+                await pool.run_collections(collections, on_update=_on_pool_job_update,
+                                           on_fleet_update=on_fleet,
+                                           on_ready=_POOL_READY.set)
             else:
                 await pool.run_batch(jobs or [], on_update=lambda j: None)
     except Exception as e:  # noqa: BLE001
@@ -387,15 +432,25 @@ async def _run_pool(jobs: list[dict] | None = None,
                         if j.get("status") in ("pending", "running"):
                             j["status"] = "failed"
                             j["error"] = f"pool: {e}"
+                        _on_pool_job_update(j)
         if jobs:
             for j in jobs:
                 if j["status"] in ("pending", "running"):
                     j["status"] = "failed"
                     j["error"] = f"pool: {e}"
     finally:
+        _POOL_READY.set()
         ACTIVE_POOL = None
         ACTIVE_LOOP = None
         RUN["active"] = False
+        for c in COLLECTIONS.values():
+            if not c.get("regenerate_image"):
+                continue
+            for j in c.get("jobs", []):
+                if j.get("status") in ("pending", "running"):
+                    j["status"] = "paused" if RUN.get("stopped") else "failed"
+                    j["error"] = "Đã dừng trước khi gen lại xong" if RUN.get("stopped") else "Pool đã kết thúc trước khi gen lại xong"
+                    _on_pool_job_update(j)
         save_collections_state()
 
 
@@ -491,19 +546,24 @@ def _safe_folder_name(name: str) -> str:
 
 
 COLLECTIONS_STATE_FILE = ROOT / "data" / "collections_state.json"
+_COLLECTIONS_SAVE_LOCK = threading.Lock()
 
 
 def save_collections_state() -> None:
     """Lưu trạng thái các collection xuống đĩa để sau mở lại app vẫn chạy tiếp được."""
     try:
-        COLLECTIONS_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        data = {
-            "saved_at": time.time(),
-            "collections": list(COLLECTIONS.values())
-        }
-        COLLECTIONS_STATE_FILE.write_text(
-            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        with _COLLECTIONS_SAVE_LOCK:
+            COLLECTIONS_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            data = {"saved_at": time.time(),
+                    "collections": list(COLLECTIONS.values())}
+            content = json.dumps(data, ensure_ascii=False, indent=2)
+            temporary = COLLECTIONS_STATE_FILE.with_name(
+                f"{COLLECTIONS_STATE_FILE.name}.{uuid.uuid4().hex}.tmp")
+            try:
+                temporary.write_text(content, encoding="utf-8")
+                temporary.replace(COLLECTIONS_STATE_FILE)
+            finally:
+                temporary.unlink(missing_ok=True)
     except Exception as e:  # noqa: BLE001
         log.warning("Lưu collections state lỗi: %s", e)
 
@@ -526,11 +586,20 @@ def load_collections_state() -> None:
                 if not jid:
                     continue
                 dest = Path(j.get("dest", ""))
-                has = (dest.exists() and dest.stat().st_size > 0) or _folder_has_image(j.get("folder", ""))
+                if c.get("free"):
+                    # Dòng CSV không biết trước ra mấy ảnh, nên "thư mục có ảnh"
+                    # KHÔNG có nghĩa là xong: chỉ tính xong khi lượt chạy đã ghi
+                    # lại được danh sách ảnh nó trả về.
+                    has = bool(j.get("results")) and all(
+                        (OUTPUTS / u.split("/files/outputs/", 1)[-1]).is_file()
+                        for u in j.get("results", []))
+                else:
+                    has = ((dest.exists() and dest.stat().st_size > 0)
+                           or _folder_has_image(j.get("folder", "")))
                 if has:
                     j["status"] = "done"
                     j["error"] = None
-                elif j.get("status") in ("running", "pending"):
+                elif j.get("status") in ("running", "pending", "done"):
                     j["status"] = "paused"
                 JOBS[jid] = j
 
@@ -539,7 +608,7 @@ def load_collections_state() -> None:
             c["total_count"] = len(c_jobs)
             if c_jobs and done_cnt >= len(c_jobs):
                 c["status"] = "done"
-            elif c.get("status") in ("running", "pending"):
+            elif c.get("status") in ("running", "pending", "done"):
                 c["status"] = "paused"
             COLLECTIONS[cid] = c
             loaded += 1
@@ -612,14 +681,7 @@ async def generate(payload: dict):
 
 @app.post("/api/collections/generate")
 async def generate_collections(payload: dict):
-    """Tạo Collections hàng loạt từ nhiều tài khoản ChatGPT chạy song song (hỗ trợ nối hàng đợi)."""
-    global ACTIVE_POOL, ACTIVE_LOOP
-    is_running = (
-        RUN["active"]
-        and ACTIVE_POOL is not None
-        and ACTIVE_LOOP is not None
-        and not ACTIVE_LOOP.is_closed()
-    )
+    """Xếp bộ mockup vào cùng hàng đợi tài khoản với bộ từ bảng."""
 
     selected_profiles = payload.get("profiles") or []
     all_profs = [p["name"] for p in _get_profiles()]
@@ -628,7 +690,7 @@ async def generate_collections(payload: dict):
     # thứ hai chết ngay hoặc tệ hơn là hỏng profile.
     valid_profiles = list(dict.fromkeys(p for p in selected_profiles if p in all_profs))
 
-    if not is_running and not valid_profiles:
+    if not RUN["active"] and not valid_profiles:
         raise HTTPException(400, "Cần chọn ít nhất 1 tài khoản ChatGPT hợp lệ.")
 
     raw_collections = payload.get("collections")
@@ -646,15 +708,6 @@ async def generate_collections(payload: dict):
 
     if not raw_collections and (not prompt_ids or not templates):
         raise HTTPException(400, "Cần chọn ít nhất 1 prompt và 1 template.")
-
-    if not is_running:
-        if not raw_collections:
-            COLLECTIONS.clear()
-            JOBS.clear()
-        RUN["mode"] = "bulk"
-        RUN["exhausted"] = {}
-        RUN["warnings"] = []
-        RUN["stopped"] = False
 
     built_collections = []
 
@@ -696,7 +749,6 @@ async def generate_collections(payload: dict):
                     "error": None
                 }
                 c_jobs.append(job)
-                JOBS[jid] = job
 
             col = {
                 "id": cid,
@@ -712,7 +764,6 @@ async def generate_collections(payload: dict):
                 skipped_cols += 1        # cả bộ đã có ảnh -> khỏi mở chat
                 continue
             built_collections.append(col)
-            COLLECTIONS[cid] = col
     else:
         # Mỗi phiên chat là 1 Collection độc lập (chốt 1 hướng concept riêng)
         for pid in prompt_ids:
@@ -757,7 +808,6 @@ async def generate_collections(payload: dict):
                         "error": None
                     }
                     c_jobs.append(job)
-                    JOBS[jid] = job
 
                 col = {
                     "id": cid,
@@ -773,7 +823,6 @@ async def generate_collections(payload: dict):
                     skipped_cols += 1
                     continue
                 built_collections.append(col)
-                COLLECTIONS[cid] = col
 
     if not built_collections:
         if skipped_jobs or skipped_cols:
@@ -784,56 +833,15 @@ async def generate_collections(payload: dict):
     if skipped_jobs or skipped_cols:
         log.info("Bỏ qua %d ảnh và %d bộ đã có sẵn.", skipped_jobs, skipped_cols)
 
-    if is_running:
-        # Chạy trong loop của pool rồi CHỜ kết quả: pool có thể từ chối (đang chạy
-        # chế độ đơn lẻ, hoặc vừa kết thúc). Trước đây cứ bắn đi rồi báo "đã xếp
-        # hàng" -> collection rơi vào hư không mà UI vẫn hiện chờ mãi.
-        fut = asyncio.run_coroutine_threadsafe(
-            _enqueue_on_pool(ACTIVE_POOL, built_collections, valid_profiles),
-            ACTIVE_LOOP)
-        try:
-            accepted = fut.result(timeout=10)
-        except Exception as e:  # noqa: BLE001
-            accepted = False
-            log.warning("Nạp thêm collection lỗi: %s", e)
-        if not accepted:
-            for c in built_collections:          # dọn sạch, đừng để rác treo trên UI
-                COLLECTIONS.pop(c["id"], None)
-                for j in c.get("jobs", []):
-                    JOBS.pop(j["id"], None)
-            raise HTTPException(
-                409, "Lượt gen đang chạy không nhận thêm collection "
-                     "(đang chạy chế độ đơn lẻ hoặc vừa kết thúc). Thử lại sau.")
-        log.info("Đã nối thêm %d collection vào hàng đợi của worker pool đang chạy.",
-                 len(built_collections))
-        save_collections_state()
-        return {
-            "enqueued": True,
-            "started_collections": len(built_collections),
-            "total_collections": len(COLLECTIONS),
-            "total_jobs": len(JOBS),
-            "skipped_jobs": skipped_jobs,
-            "skipped_collections": skipped_cols,
-            "profiles": RUN.get("profiles", valid_profiles),
-            "collections": _public_collections()
-        }
-
-    RUN["profiles"] = valid_profiles
-    threading.Thread(
-        target=_run_pool_thread,
-        kwargs={"collections": built_collections, "profiles": valid_profiles},
-        daemon=True
-    ).start()
-
-    save_collections_state()
+    enqueued = _start_free_cols(built_collections, valid_profiles)
     return {
-        "enqueued": False,
+        "enqueued": enqueued,
         "started_collections": len(built_collections),
         "total_collections": len(COLLECTIONS),
         "total_jobs": len(JOBS),
         "skipped_jobs": skipped_jobs,
         "skipped_collections": skipped_cols,
-        "profiles": valid_profiles,
+        "profiles": RUN.get("profiles", valid_profiles),
         "collections": _public_collections()
     }
 
@@ -854,6 +862,8 @@ async def resume_collections(payload: dict):
     for c in list(COLLECTIONS.values()):
         if c.get("free"):          # bộ trang CSV không có template để dựng lại
             continue
+        if RUN["active"] and c.get("status") in ("pending", "running"):
+            continue  # không xếp trùng bộ đã ở hàng đợi hoặc đang được tạo
         c_jobs = c.get("jobs", [])
         for j in c_jobs:
             dest = Path(j.get("dest", ""))
@@ -892,6 +902,16 @@ async def resume_collections(payload: dict):
             })
 
     if not incomplete_cols:
+        csv_left = sum(1 for c in COLLECTIONS.values()
+                       if c.get("free") and c.get("status") != "done")
+        if csv_left:
+            return {
+                "resumed": 0,
+                "message": f"Còn {csv_left} dòng CSV chưa xong - bấm 'Chạy tiếp' "
+                           "ở trang CSV chung phiên (/csv-session).",
+                "total_collections": len(COLLECTIONS),
+                "collections": _public_collections(),
+            }
         return {
             "resumed": 0,
             "message": "Toàn bộ các bộ collection đã hoàn tất 100%!",
@@ -910,7 +930,7 @@ async def resume_collections(payload: dict):
 def _public_jobs() -> list[dict]:
     out = []
     for j in JOBS.values():
-        has = Path(j["dest"]).exists()
+        has = bool(j.get("results")) if "results" in j else Path(j["dest"]).exists()
         out.append({
             "id": j["id"], "template_name": j["template_name"],
             "template_url": j["template_url"], "prompt_name": j["prompt_name"],
@@ -923,10 +943,17 @@ def _public_jobs() -> list[dict]:
 
 def _public_collections() -> list[dict]:
     out = []
+    waiting = 0
     for c in COLLECTIONS.values():
+        if c.get("hidden"):
+            continue
+        if RUN["active"] and c.get("status") == "pending":
+            waiting += 1
+        queue_position = waiting if RUN["active"] and c.get("status") == "pending" else None
         c_jobs = []
         for j in c.get("jobs", []):
-            has = Path(j["dest"]).exists()
+            has = (bool(j.get("results")) if c.get("free") else
+                   Path(j["dest"]).exists())
             c_jobs.append({
                 "id": j["id"],
                 "template_name": j.get("template_name", ""),
@@ -937,6 +964,8 @@ def _public_collections() -> list[dict]:
                 "status": j["status"],
                 "error": j.get("error"),
                 "worker": j.get("worker"),
+                "regen_status": j.get("regen_status"),
+                "regen_error": j.get("regen_error"),
                 "result_url": j["result_url"] if has else None,
             })
         done_count = sum(1 for j in c_jobs if j["status"] == "done")
@@ -944,10 +973,15 @@ def _public_collections() -> list[dict]:
         out.append({
             "id": c["id"],
             "name": c["name"],
+            "regeneration": c.get("regeneration", 1),
             "prompt_name": c["prompt_name"],
             "prompt_text": c.get("prompt", ""),
             "free": bool(c.get("free")),
+            "free_sequence": bool(c.get("free_sequence")),
+            "can_regenerate_image": bool(c.get("free_sequence") and c.get("chat_url")
+                                         and c.get("ran_on")),
             "status": c.get("status", "pending"),
+            "queue_position": queue_position,
             "worker": c.get("worker"),
             "error": c.get("error"),
             "done_count": done_count,
@@ -980,6 +1014,8 @@ def get_jobs():
         "profiles": RUN.get("profiles", []),
         "fleet": RUN.get("fleet", {}),
         "warnings": list(RUN.get("warnings") or []),
+        "thinking_level": RUN.get("thinking_level") or str(load_cfg().get("run", {}).get("thinking", "vừa")),
+        "thinking_state": dict(RUN.get("thinking_state") or {}),
         "stopped": RUN.get("stopped", False),
         "jobs": jobs,
         "collections": cols,
@@ -1000,17 +1036,21 @@ def _job_files(j: dict) -> list[Path]:
             if p.exists():
                 out.append(p)
         return out
+    if "results" in j:
+        return []
     p = Path(j.get("dest", ""))
     return [p] if p.exists() else []
 
 
 @app.get("/api/jobs/zip")
-def download_jobs_zip(cid: str | None = None):
+def download_jobs_zip(cid: str | None = None, mode: str | None = None):
     import io
     import zipfile
     from fastapi.responses import StreamingResponse
     buf = io.BytesIO()
     count = 0
+    if cid and cid not in COLLECTIONS:
+        raise HTTPException(404, "Không tìm thấy bộ ảnh.")
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
         if cid and cid in COLLECTIONS:
             c = COLLECTIONS[cid]
@@ -1023,6 +1063,12 @@ def download_jobs_zip(cid: str | None = None):
             filename = f"designs_{c_slug}.zip"
         elif COLLECTIONS:
             for c in COLLECTIONS.values():
+                if c.get("hidden"):
+                    continue
+                if mode == "mockup" and c.get("free"):
+                    continue
+                if mode == "csv-session" and not c.get("free_sequence"):
+                    continue
                 c_slug = _design_slug(c.get("name") or "collection")
                 for j in c.get("jobs", []):
                     for p in _job_files(j):
@@ -1066,8 +1112,9 @@ async def stop_jobs():
     remaining_cols = 0
     done_cols = 0
 
-    if ACTIVE_POOL:
-        ACTIVE_POOL.stop()
+    if ACTIVE_POOL and ACTIVE_LOOP and not ACTIVE_LOOP.is_closed():
+        ACTIVE_POOL.stopped = True
+        ACTIVE_LOOP.call_soon_threadsafe(ACTIVE_POOL.stop)
 
     for c in COLLECTIONS.values():
         if c.get("status") == "running":
@@ -1737,6 +1784,30 @@ def profile_login(name: str, payload: dict | None = None):
     return {"opened": True, "auto": auto}
 
 
+_MANUAL_PROFILE_LOCK = threading.Lock()
+
+
+@app.post("/api/profiles/manual-login")
+def manual_login_new_profile():
+    """Tạo profile mới rồi mở Chrome cho người dùng tự đăng nhập."""
+    if BULK.get("active"):
+        raise HTTPException(409, "Đang đăng nhập hàng loạt; chờ lượt đó xong.")
+    with _MANUAL_PROFILE_LOCK:
+        profiles = _get_profiles()
+        taken = {p["name"] for p in profiles}
+        base = _profiles_dir()
+        if base.is_dir():
+            taken.update(p.name for p in base.iterdir() if p.is_dir())
+        name = _next_profile_name(taken)
+        _save_profiles([*profiles, {"name": name, "tabs": 1}])
+        try:
+            result = profile_login(name)
+        except Exception:
+            _save_profiles([p for p in _get_profiles() if p["name"] != name])
+            raise
+    return {"profile": name, **result}
+
+
 @app.get("/api/profiles/{name}/login/status")
 def profile_login_status(name: str):
     """UI hỏi tiến độ đăng nhập tự động. Không bao giờ trả mật khẩu/seed."""
@@ -1848,7 +1919,9 @@ def serve_design(name: str):
 
 
 @app.post("/api/csvrun/start")
-async def csvrun_start(file: UploadFile):
+async def csvrun_start(file: UploadFile, templates: list[str] = Form(default=[]),
+                       skip_done: bool = Form(default=False)):
+    raise HTTPException(410, "CSV từng prompt đã được gỡ. Dùng CSV chung phiên tại /csv-session.")
     """Trang CSV: nhập CSV là CHẠY LUÔN.
 
     Mỗi dòng = một phiên chat, gửi nguyên văn cột PROMPT (KHÔNG gói khuôn prompt,
@@ -1873,6 +1946,15 @@ async def csvrun_start(file: UploadFile):
                 return (v or "").strip()
         return ""
 
+    # Ảnh đính kèm dùng CHUNG cho mọi dòng (đường dẫn tương đối trong data/templates)
+    attach = []
+    for t in templates:
+        tp = TEMPLATES / t
+        if tp.exists() and tp.is_file():
+            attach.append(str(tp))
+
+    fresh_run = not RUN["active"]
+
     built, skipped_empty, skipped_done = [], 0, 0
     for i, row in enumerate(rows, 1):
         text = col(row, "prompt", "design prompt", "noi dung", "nội dung")
@@ -1885,7 +1967,11 @@ async def csvrun_start(file: UploadFile):
         # Như quy ước cũ <Loại>__<Topic>__<Design>, nhưng không có ảnh mockup nên
         # không có phần loại sản phẩm.
         folder = f"{_name_part(topic or name, 'Topic')}__{_name_part(style, 'Design')}"
-        if _folder_has_image(folder):
+        # MẶC ĐỊNH KHÔNG BỎ QUA. Trang này không biết trước mỗi dòng ra mấy ảnh,
+        # nên "thư mục đã có ảnh" không có nghĩa là dòng đó xong: ra 1 ảnh rồi
+        # hỏng giữa chừng cũng bị coi là xong và không bao giờ chạy lại được.
+        # Chạy lại thì ảnh mới đánh số tiếp (2.png, 3.png...), không đè ảnh cũ.
+        if skip_done and _folder_has_image(folder):
             skipped_done += 1
             continue
         jid = uuid.uuid4().hex[:8]
@@ -1895,6 +1981,7 @@ async def csvrun_start(file: UploadFile):
             "prompt": text,
             "prompt_name": name,
             "free": True,
+            "templates": attach,
             "status": "pending",
             "worker": None,
             "error": None,
@@ -1916,7 +2003,9 @@ async def csvrun_start(file: UploadFile):
 
     if not built:
         if skipped_done:
-            raise HTTPException(409, f"Cả {skipped_done} dòng đều đã có ảnh - không còn gì để chạy.")
+            raise HTTPException(
+                409, f"Cả {skipped_done} dòng đều đã có ảnh - không còn gì để chạy. "
+                     "Bỏ tick 'Bỏ qua dòng đã có ảnh' nếu muốn chạy lại.")
         raise HTTPException(400, "Không dòng nào có cột PROMPT.")
 
     # Kiểm tài khoản SAU khi đọc CSV: file hỏng thì báo lỗi file trước, khỏi bắt
@@ -1927,10 +2016,45 @@ async def csvrun_start(file: UploadFile):
     if not profiles:
         raise HTTPException(400, "Chưa có tài khoản ChatGPT nào.")
 
-    is_running = (RUN["active"] and ACTIVE_POOL is not None
-                  and ACTIVE_LOOP is not None and not ACTIVE_LOOP.is_closed())
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    enq = _start_free_cols(built, profiles)
+    log.info("Trang CSV: chạy %d dòng (bỏ %d dòng trống, %d dòng đã có ảnh).",
+             len(built), skipped_empty, skipped_done)
+    return {"started": len(built), "skipped_empty": skipped_empty,
+            "skipped_done": skipped_done, "profiles": profiles,
+            "attached": len(attach), "enqueued": enq}
 
+
+def _start_free_cols(built: list[dict], profiles: list[str]) -> bool:
+    """Cổng hàng đợi chung cho mockup và CSV. True = nối vào lượt đang chạy."""
+    with _POOL_START_LOCK:
+        return _start_free_cols_locked(built, profiles)
+
+
+def _start_free_cols_locked(built: list[dict], profiles: list[str]) -> bool:
+    global ACTIVE_POOL, ACTIVE_LOOP
+    if RUN["active"] and not _POOL_READY.is_set():
+        if not _POOL_READY.wait(timeout=15):
+            raise HTTPException(409, "Pool đang khởi động; thử nạp lại sau vài giây.")
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    is_running = (RUN["active"] and ACTIVE_POOL is not None
+                  and ACTIVE_LOOP is not None and not ACTIVE_LOOP.is_closed()
+                  and ACTIVE_POOL.running_collections)
+    if not is_running and RUN["active"]:
+        raise HTTPException(409, "Pool đang khởi động hoặc đóng; thử lại sau.")
+    if not is_running and not profiles:
+        raise HTTPException(400, "Cần chọn ít nhất 1 tài khoản ChatGPT hợp lệ.")
+    if not is_running:
+        RUN["active"] = True
+        _POOL_READY.clear()
     if is_running:
+        previous_cols = {c["id"]: COLLECTIONS.get(c["id"]) for c in built}
+        previous_jobs = {j["id"]: JOBS.get(j["id"])
+                         for c in built for j in c["jobs"]}
         for c in built:
             COLLECTIONS[c["id"]] = c
             for j in c["jobs"]:
@@ -1944,50 +2068,546 @@ async def csvrun_start(file: UploadFile):
             log.warning("Nạp thêm dòng CSV lỗi: %s", e)
         if not accepted:
             for c in built:
-                COLLECTIONS.pop(c["id"], None)
+                if previous_cols[c["id"]] is None:
+                    COLLECTIONS.pop(c["id"], None)
+                else:
+                    COLLECTIONS[c["id"]] = previous_cols[c["id"]]
                 for j in c["jobs"]:
-                    JOBS.pop(j["id"], None)
+                    if previous_jobs[j["id"]] is None:
+                        JOBS.pop(j["id"], None)
+                    else:
+                        JOBS[j["id"]] = previous_jobs[j["id"]]
             raise HTTPException(409, "Lượt gen đang chạy không nhận thêm. Thử lại sau.")
+        RUN["profiles"] = list(dict.fromkeys(
+            slot.profile for slot in ACTIVE_POOL._slots))
     else:
-        COLLECTIONS.clear()
-        JOBS.clear()
+        launch_profiles = profiles[:max(1, min(len(profiles), len(built)))]
         RUN["mode"] = "bulk"
         RUN["exhausted"] = {}
         RUN["warnings"] = []
+        RUN["thinking_state"] = {}
+        RUN["thinking_level"] = str(load_cfg().get("run", {}).get("thinking", "vừa"))
         RUN["stopped"] = False
-        RUN["profiles"] = profiles
+        RUN["profiles"] = launch_profiles
         for c in built:
             COLLECTIONS[c["id"]] = c
             for j in c["jobs"]:
                 JOBS[j["id"]] = j
-        threading.Thread(target=_run_pool_thread,
-                         kwargs={"collections": built, "profiles": profiles},
-                         daemon=True).start()
-
+        try:
+            threading.Thread(target=_run_pool_thread,
+                             kwargs={"collections": built, "profiles": launch_profiles},
+                             daemon=True).start()
+        except Exception:
+            RUN["active"] = False
+            _POOL_READY.set()
+            for c in built:
+                COLLECTIONS.pop(c["id"], None)
+                for j in c["jobs"]:
+                    JOBS.pop(j["id"], None)
+            raise
     save_collections_state()
-    log.info("Trang CSV: chạy %d dòng (bỏ %d dòng trống, %d dòng đã có ảnh).",
-             len(built), skipped_empty, skipped_done)
-    return {"started": len(built), "skipped_empty": skipped_empty,
-            "skipped_done": skipped_done, "profiles": profiles,
-            "enqueued": is_running}
+    return is_running
+
+
+def _csv_profiles() -> list[str]:
+    base = _profiles_dir()
+    all_profs = [p["name"] for p in _get_profiles()]
+    profiles = [n for n in all_profs if (base / n).exists()] or all_profs
+    if not profiles:
+        raise HTTPException(400, "Chưa có tài khoản ChatGPT nào.")
+    return profiles
+
+
+@app.post("/api/csvrun/resume")
+def csvrun_resume():
+    raise HTTPException(410, "CSV từng prompt đã được gỡ. Dùng CSV chung phiên tại /csv-session.")
+    """Chạy tiếp các dòng CSV chưa xong.
+
+    Trang chính không làm được việc này: các bộ chỉ-chữ không có template để dựng
+    lại nên nó bỏ qua, rồi báo 'đã hoàn tất 100%' dù còn dòng dở."""
+    left = [c for c in COLLECTIONS.values()
+            if c.get("free") and not c.get("hidden") and c.get("status") != "done"]
+    if not left:
+        return {"resumed": 0, "message": "Không còn dòng CSV nào dở dang."}
+
+    profiles = _csv_profiles()
+    for c in left:
+        c["status"] = "pending"
+        c["error"] = None
+        c["worker"] = None
+        for j in c.get("jobs", []):
+            j["status"] = "pending"
+            j["error"] = None
+            j["worker"] = None
+    enq = _start_free_cols(left, profiles)
+    log.info("Trang CSV: chạy tiếp %d dòng dở dang.", len(left))
+    return {"resumed": len(left), "profiles": profiles, "enqueued": enq}
+
+
+@app.post("/api/csvrun/{cid}/resume")
+def csvrun_resume_one(cid: str):
+    raise HTTPException(410, "CSV từng prompt đã được gỡ. Dùng CSV chung phiên tại /csv-session.")
+    """Thử lại đúng một dòng CSV bị lỗi hoặc tạm dừng."""
+    collection = COLLECTIONS.get(cid)
+    if not collection or not collection.get("free") or collection.get("free_sequence"):
+        raise HTTPException(404, "Không tìm thấy dòng CSV.")
+    if collection.get("status") not in ("failed", "paused", "partial"):
+        raise HTTPException(409, "Dòng này không ở trạng thái cần sửa lỗi.")
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    collection["status"] = "pending"
+    collection["error"] = None
+    collection["worker"] = None
+    for job in collection.get("jobs", []):
+        job["status"] = "pending"
+        job["error"] = None
+        job["worker"] = None
+    enqueued = _start_free_cols([collection], _csv_profiles())
+    return {"resumed": 1, "enqueued": enqueued}
 
 
 @app.get("/csv")
 def csv_page():
-    """Trang CSV chạy thẳng (đóng dấu phiên bản js/css như trang chủ)."""
-    html = (STATIC_DIR / "csvrun.html").read_text(encoding="utf-8")
+    """Old bookmark: send users to the sole CSV workflow."""
+    return RedirectResponse("/csv-session", status_code=307)
+
+
+def _read_csv_session_table(raw: bytes, filename: str) -> tuple[list[str], list[dict], str]:
+    """Read CSV/XLSX once, preserving source column order for prompt selection."""
+    import csv
+    import io as _io
+
+    suffix = Path(filename or "").suffix.lower()
+    try:
+        if suffix == ".xlsx":
+            from openpyxl import load_workbook
+            workbook = load_workbook(_io.BytesIO(raw), read_only=True, data_only=True)
+            try:
+                cells = workbook.worksheets[0].iter_rows(values_only=True)
+                headers = [str(value).strip() if value is not None else ""
+                           for value in next(cells, ())]
+                rows = [{header: str(value).strip() if value is not None else ""
+                         for header, value in zip(headers, values)}
+                        for values in cells if any(value is not None and
+                                                    str(value).strip() for value in values)]
+            finally:
+                workbook.close()
+        elif suffix in (".csv", ""):
+            reader = csv.DictReader(_io.StringIO(raw.decode("utf-8-sig", errors="replace")))
+            rows = list(reader)
+            headers = reader.fieldnames or []
+        else:
+            raise HTTPException(400, "Chỉ hỗ trợ file .csv hoặc .xlsx.")
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(400, f"Không đọc được file CSV/XLSX: {e}")
+    if not rows:
+        raise HTTPException(400, "File không có hàng dữ liệu.")
+    if len(headers) != len(set(headers)):
+        raise HTTPException(400, "File có tên cột trùng nhau; hãy đặt tên riêng cho từng cột.")
+    return headers, rows, suffix
+
+
+@app.post("/api/csv-session/preview")
+async def csv_session_preview(file: UploadFile):
+    headers, rows, _ = _read_csv_session_table(await file.read(), file.filename or "")
+    return {"headers": headers, "rows": len(rows),
+            "suggested_prompts": [h for h in headers if h and
+                                  re.match(r"^\s*prompt(?:\s+|[-_])", h, re.I)],
+            "suggested_size_chart": next((h for h in headers if h and
+                h.strip().lower() in ("size / variant", "size/variant", "size chart")), "")}
+
+
+@app.post("/api/csv-session/start")
+async def csv_session_start(file: UploadFile,
+                            templates: list[str] = Form(default=[]),
+                            skip_done: bool = Form(default=False),
+                            prompt_fields: list[str] = Form(default=[]),
+                            size_chart_field: str = Form(default="__none__")):
+    """Mỗi hàng CSV/XLSX là một chat; các prompt chạy theo thứ tự đã chọn."""
+    headers, rows, suffix = _read_csv_session_table(
+        await file.read(), file.filename or "")
+
+    prompt_cols = prompt_fields or [h for h in headers
+                                    if h and re.match(r"^\s*prompt(?:\s+|[-_])", h, re.I)]
+    if len(prompt_cols) != len(set(prompt_cols)) or any(h not in headers for h in prompt_cols):
+        raise HTTPException(400, "Danh sách cột prompt không hợp lệ hoặc bị trùng.")
+    if not prompt_cols:
+        raise HTTPException(400, "Chưa chọn cột prompt nào.")
+    if size_chart_field and size_chart_field != "__none__" and size_chart_field not in headers:
+        raise HTTPException(400, "Cột SIZE CHART không có trong file.")
+
+    def value(row: dict, *names: str) -> str:
+        wanted = {n.lower() for n in names}
+        for key, val in row.items():
+            if key and key.strip().lower() in wanted:
+                return (val or "").strip()
+        return ""
+
+    def size_chart_prompt(source: str) -> str:
+        return (
+            "Generate one finished square 1:1 SIZE CHART IMAGE. "
+            "Keep typography and colors consistent with this collection, "
+            "but make this a chart-only image, not a product design image. "
+            "Use only the SIZE / VARIANT source below. Copy every size label, "
+            "measurement, unit, range, and decimal exactly; keep their row order. "
+            "Include the color/variant and fit notes as text where readable. "
+            "Do not invent, convert, round, or change measurements. "
+            "Do not use PRODUCT DESCRIPTION or add unrelated product copy. "
+            "Return the rendered chart image, not a text answer.\n\n"
+            f"SIZE / VARIANT SOURCE:\n{source}"
+        )
+
+    attach = []
+    for rel in templates:
+        path = TEMPLATES / rel
+        if path.exists() and path.is_file():
+            attach.append(str(path))
+
+    fresh_run = not RUN["active"]
+    built, skipped_empty, skipped_done, size_chart_rows = [], 0, 0, 0
+    used_folders: set[str] = set()
+    for row_no, row in enumerate(rows, 1):
+        prompts = [(header, (row.get(header) or "").strip(), bool(re.search(
+                    r"\bsize\b", header, re.I)))
+                   for header in prompt_cols if (row.get(header) or "").strip()]
+        if not prompts:
+            skipped_empty += 1
+            continue
+        size_source = ("" if size_chart_field == "__none__" else
+                       (row.get(size_chart_field) or "").strip() if size_chart_field else
+                       value(row, "size / variant", "size/variant", "size chart"))
+        if size_source:
+            prompts.append(("SIZE CHART", size_chart_prompt(size_source), True))
+
+        collection_name = value(row, "collection", "name", "ten", "tên")
+        personal = value(row, "personal", "topic", "character", "chủ đề")
+        style = value(row, "style", "design", "phong cách")
+        source_name = _name_part(Path(file.filename or "CSV").stem, "CSV")
+        stt = value(row, "stt", "no", "number")
+        display_name = collection_name or personal or (
+            f"{source_name}__{_name_part(stt, str(row_no))}" if suffix == ".xlsx"
+            else f"Dong {row_no}")
+        base_folder = "__".join(filter(None, [
+            _name_part(display_name, f"Dong-{row_no}"),
+            _name_part(style, "Design") if style else "",
+        ]))
+
+        # Hai hàng trùng tên vẫn là hai chat/design riêng; không cho hai worker
+        # cùng ghi 1.png vào cùng một thư mục.
+        if base_folder in used_folders:
+            original = base_folder
+            base_folder = f"{original}__Row-{row_no}"
+            while base_folder in used_folders:
+                base_folder += "-x"
+        used_folders.add(base_folder)
+        if not fresh_run and any(
+                c.get("free_sequence") and c.get("folder") == base_folder
+                and c.get("status") in ("pending", "running")
+                for c in COLLECTIONS.values()):
+            raise HTTPException(
+                409, f"Collection '{display_name}' đang nằm trong hàng chờ hoặc đang chạy.")
+
+        if skip_done and any(
+                c.get("free_sequence") and
+                c.get("folder") == base_folder and
+                c.get("status") == "done" and
+                [j.get("prompt") for j in c.get("jobs", [])] ==
+                [prompt for _, prompt, _ in prompts] and
+                all(j.get("results") and all(
+                    (OUTPUTS / u.split("/files/outputs/", 1)[-1]).is_file()
+                    for u in j["results"]) for j in c.get("jobs", []))
+                for c in COLLECTIONS.values()):
+            skipped_done += 1
+            continue
+
+        if size_source:
+            size_chart_rows += 1
+        jobs = []
+        for header, prompt, prompt_only in prompts:
+            label = header.strip()
+            # Mọi ảnh của một hàng/collection nằm chung một thư mục. Pool xử lý
+            # prompt theo thứ tự và dùng _next_index(), nên tên sẽ tự tăng
+            # 1.png, 2.png, 3.png... xuyên suốt PROMPT A, B, C.
+            folder = base_folder
+            jid = uuid.uuid4().hex[:8]
+            jobs.append({
+                "id": jid,
+                "template": "", "template_name": "", "template_url": "",
+                "prompt": prompt, "prompt_name": label,
+                "prompt_only": prompt_only,
+                "dest": str(OUTPUTS / folder / "1.png"),
+                "result_url": f"/files/outputs/{folder}/1.png",
+                "folder": folder, "results": [],
+                "status": "pending", "error": None,
+            })
+        built.append({
+            "id": uuid.uuid4().hex[:8],
+            "name": _safe_folder_name(display_name),
+            "folder": base_folder,
+            "prompt": prompts[0][1], "prompt_name": prompts[0][0],
+            "free": True, "free_sequence": True, "templates": attach,
+            "status": "pending", "worker": None, "error": None,
+            "jobs": jobs,
+        })
+
+    if not built:
+        if skipped_done:
+            raise HTTPException(409, "Tất cả hàng đều đã có đủ ảnh.")
+        raise HTTPException(400, "Không hàng nào có prompt.")
+
+    profiles = _csv_profiles()
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    enqueued = _start_free_cols(built, profiles)
+    return {"started": len(built),
+            "prompt_columns": prompt_cols + (["SIZE CHART"] if size_chart_rows else []),
+            "size_chart_rows": size_chart_rows,
+            "skipped_empty": skipped_empty, "skipped_done": skipped_done,
+            "profiles": profiles, "attached": len(attach), "enqueued": enqueued}
+
+
+@app.post("/api/csv-session/resume")
+def csv_session_resume():
+    left = [c for c in COLLECTIONS.values()
+            if c.get("free_sequence") and not c.get("hidden")
+            and c.get("status") != "done"
+            and not (RUN["active"] and c.get("status") in ("pending", "running"))]
+    if not left:
+        return {"resumed": 0, "message": "Không còn hàng nào dở dang."}
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    for collection in left:
+        collection["status"] = "pending"
+        collection["error"] = None
+        collection["worker"] = None
+        # Một phiên cũ đã đóng thì không thể tiếp tục ngữ cảnh của prompt B.
+        # Chạy lại cả hàng để A và B vẫn thật sự thuộc cùng một chat/design.
+        for job in collection.get("jobs", []):
+            job["status"] = "pending"
+            job["error"] = None
+            job["worker"] = None
+            job["results"] = []
+    enqueued = _start_free_cols(left, _csv_profiles())
+    return {"resumed": len(left), "enqueued": enqueued}
+
+
+@app.delete("/api/csv-session/{cid}")
+def csv_session_delete_one(cid: str):
+    """Xoá một bộ CSV và ảnh riêng của bộ; không đụng ảnh còn được bộ khác dùng."""
+    collection = COLLECTIONS.get(cid)
+    if not collection or not collection.get("free_sequence") or collection.get("hidden"):
+        raise HTTPException(404, "Không tìm thấy bộ ảnh.")
+    return _delete_collection_one(cid, collection)
+
+
+@app.delete("/api/collections/{cid}")
+def delete_collection_one(cid: str):
+    """Xoá riêng một bộ kết quả mockup; bộ khác và hàng đợi vẫn được giữ lại."""
+    collection = COLLECTIONS.get(cid)
+    if not collection or collection.get("free") or collection.get("hidden"):
+        raise HTTPException(404, "Không tìm thấy bộ ảnh.")
+    return _delete_collection_one(cid, collection)
+
+
+@app.delete("/api/collections")
+def delete_mockup_collections():
+    """Chỉ xoá kết quả mockup; không chạm vào ảnh từ bảng CSV."""
+    ids = [cid for cid, collection in COLLECTIONS.items()
+           if not collection.get("free") and not collection.get("hidden")]
+    if any(COLLECTIONS[cid].get("status") in ("pending", "running") or any(
+            job.get("regen_status") in ("pending", "running")
+            for job in COLLECTIONS[cid].get("jobs", [])) for cid in ids):
+        raise HTTPException(409, "Đang tạo ảnh. Hãy dừng trước khi xoá kết quả.")
+    removed = 0
+    for cid in ids:
+        removed += _delete_collection_one(cid, COLLECTIONS[cid])["deleted_files"]
+    return {"ok": True, "deleted_collections": len(ids), "deleted_files": removed}
+
+
+def _delete_collection_one(cid: str, collection: dict):
+    if collection.get("status") in ("pending", "running") or any(
+            j.get("regen_status") in ("pending", "running")
+            for j in collection.get("jobs", [])):
+        raise HTTPException(409, "Bộ đang tạo ảnh. Hãy dừng trước khi xoá.")
+
+    own_jobs = collection.get("jobs", [])
+    own_ids = {j.get("id") for j in own_jobs}
+    shared_files = {
+        p.resolve()
+        for other_id, other in COLLECTIONS.items() if other_id != cid
+        for job in other.get("jobs", []) for p in _job_files(job)
+    }
+    shared_files.update(
+        p.resolve() for jid, job in JOBS.items() if jid not in own_ids
+        for p in _job_files(job)
+    )
+    own_files = {p.resolve() for job in own_jobs for p in _job_files(job)}
+    removed = 0
+    for path in own_files - shared_files:
+        if not (_under(path, OUTPUTS) or _under(path, LEGACY_OUTPUTS)):
+            continue
+        try:
+            path.unlink(missing_ok=True)
+            removed += 1
+        except OSError as exc:
+            raise HTTPException(500, f"Không xoá được ảnh {path.name}.") from exc
+
+    for jid in own_ids:
+        if jid:
+            JOBS.pop(jid, None)
+    COLLECTIONS.pop(cid, None)
+    for folder in {p.parent for p in own_files}:
+        if (_under(folder, OUTPUTS) or _under(folder, LEGACY_OUTPUTS)) and folder.is_dir():
+            try:
+                folder.rmdir()  # Chỉ dọn thư mục nếu đã rỗng.
+            except OSError:
+                pass
+    save_collections_state()
+    return {"ok": True, "deleted_files": removed}
+
+
+@app.post("/api/csv-session/{cid}/resume")
+def csv_session_resume_one(cid: str):
+    """Chạy lại đúng một hàng, mở chat mới để mọi prompt giữ cùng design."""
+    collection = COLLECTIONS.get(cid)
+    if not collection or not collection.get("free_sequence") or collection.get("hidden"):
+        raise HTTPException(404, "Không tìm thấy hàng CSV chung phiên.")
+    if collection.get("status") in ("pending", "running", "done"):
+        raise HTTPException(409, "Hàng này đang chạy, đang chờ hoặc đã hoàn tất.")
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    collection["status"] = "pending"
+    collection["error"] = None
+    collection["worker"] = None
+    for job in collection.get("jobs", []):
+        job["status"] = "pending"
+        job["error"] = None
+        job["worker"] = None
+        job["results"] = []
+    enqueued = _start_free_cols([collection], _csv_profiles())
+    return {"resumed": 1, "enqueued": enqueued}
+
+
+@app.post("/api/csv-session/{cid}/jobs/{jid}/regenerate-image")
+def csv_session_regenerate_image(cid: str, jid: str, payload: dict):
+    """Queue one image replacement in the collection's original ChatGPT chat."""
+    original = COLLECTIONS.get(cid)
+    if not original or not original.get("free_sequence") or original.get("hidden"):
+        raise HTTPException(404, "Không tìm thấy bộ CSV chung phiên.")
+    if original.get("status") in ("pending", "running"):
+        raise HTTPException(409, "Bộ này đang chạy hoặc đang chờ.")
+    job = next((item for item in original.get("jobs", []) if item["id"] == jid), None)
+    if not job:
+        raise HTTPException(404, "Không tìm thấy prompt của ảnh.")
+    try:
+        index = int(payload.get("image_index"))
+    except (TypeError, ValueError):
+        raise HTTPException(400, "Vị trí ảnh không hợp lệ.")
+    results = job.get("results") or []
+    if index < 0 or index >= len(results):
+        raise HTTPException(400, "Ảnh cần gen lại không còn trong kết quả.")
+    prompt_only = bool(job.get("prompt_only") or re.search(
+        r"\bsize\b",
+        str(job.get("prompt_name", "")), re.I))
+    first_job = original["jobs"][0]
+    first_results = first_job.get("results") or []
+    first_image = (Path(first_job["dest"]).parent / Path(first_results[0]).name
+                   if first_results else None)
+    if not prompt_only and (first_image is None or not first_image.is_file()):
+        raise HTTPException(409, "Không tìm thấy ảnh 1 của bộ để đính kèm khi gen lại.")
+    if job.get("regen_status") in ("pending", "running"):
+        raise HTTPException(409, "Ảnh của prompt này đang được gen lại.")
+    profile = original.get("ran_on")
+    url = original.get("chat_url", "")
+    if not profile or not (url.startswith("https://chatgpt.com/") and "/c/" in url):
+        raise HTTPException(409, "Bộ cũ chưa lưu URL phiên ChatGPT; không thể mở đúng chat để gen lại ảnh.")
+    if profile not in _csv_profiles():
+        raise HTTPException(409, f"Tài khoản gốc '{profile}' không còn khả dụng.")
+    if RUN.get("exhausted", {}).get(profile):
+        raise HTTPException(409, f"Tài khoản gốc '{profile}' đang hết lượt.")
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi thử lại.")
+
+    clone_job = copy.deepcopy(job)
+    clone_job["id"] = uuid.uuid4().hex[:8]
+    clone_job["status"] = "pending"
+    clone_job["error"] = None
+    clone_job["results"] = []
+    clone_job["source_job_id"] = jid
+    clone_job["source_image_url"] = results[index]
+    clone_job.pop("regen_status", None)
+    clone_job.pop("regen_error", None)
+    task = {
+        "id": uuid.uuid4().hex[:8], "name": f"{original['name']} · gen lại ảnh",
+        "prompt": job.get("prompt", ""), "prompt_name": job.get("prompt_name", ""),
+        "jobs": [clone_job], "free": True, "free_sequence": True,
+        "regenerate_image": True, "hidden": True,
+        "required_profile": profile, "ran_on": profile,
+        "chat_url": url, "source_image_index": index,
+        "source_image_path": str(first_image) if first_image and not prompt_only else "",
+        "status": "pending", "worker": None, "error": None,
+    }
+    job["regen_status"] = "pending"
+    job["regen_error"] = None
+    try:
+        _start_free_cols([task], [profile])
+    except Exception:
+        job["regen_status"] = None
+        raise
+    return {"queued": True, "task_id": task["id"], "profile": profile}
+
+
+@app.post("/api/collections/{cid}/regenerate")
+def regenerate_free_collection(cid: str):
+    """Tạo lượt mới, giữ nguyên ảnh và trạng thái của lượt cũ."""
+    original = COLLECTIONS.get(cid)
+    if not original or not original.get("free") or original.get("hidden"):
+        raise HTTPException(404, "Không tìm thấy hàng CSV.")
+    if original.get("status") in ("pending", "running"):
+        raise HTTPException(409, "Hàng này đang chạy hoặc đang chờ.")
+    if (ACTIVE_POOL is not None and ACTIVE_LOOP is not None
+            and not ACTIVE_LOOP.is_closed() and ACTIVE_POOL.stopped):
+        raise HTTPException(409, "Lượt cũ đang dừng; chờ Chrome đóng rồi chạy tiếp.")
+    clone = copy.deepcopy(original)
+    clone["id"] = uuid.uuid4().hex[:8]
+    clone["regeneration"] = int(original.get("regeneration", 1)) + 1
+    clone["status"] = "pending"
+    clone["error"] = None
+    clone["worker"] = None
+    clone.pop("ran_on", None)
+    clone.pop("chat_url", None)
+    for job in clone.get("jobs", []):
+        job["id"] = uuid.uuid4().hex[:8]
+        job["status"] = "pending"
+        job["error"] = None
+        job["worker"] = None
+        job["results"] = []
+    enqueued = _start_free_cols([clone], _csv_profiles())
+    return {"started": 1, "id": clone["id"], "enqueued": enqueued}
+
+
+@app.get("/csv-session")
+def csv_session_page():
+    html = (STATIC_DIR / "csvsession.html").read_text(encoding="utf-8")
 
     def stamp(m):
-        f = STATIC_DIR / m.group(1)
-        return f"{m.group(1)}?v={int(f.stat().st_mtime) if f.exists() else 0}"
+        path = STATIC_DIR / m.group(1)
+        return f"{m.group(1)}?v={int(path.stat().st_mtime) if path.exists() else 0}"
 
-    html = re.sub(r'(csvrun\.js|style\.css)\?v=\d+', stamp, html)
+    html = re.sub(r'(csvsession\.js|style\.css)\?v=\d+', stamp, html)
     return HTMLResponse(html)
 
 
-@app.get("/")
-def index():
-    """Trang chủ, có ĐÓNG DẤU PHIÊN BẢN theo giờ sửa file vào app.js/style.css.
+@app.get("/mockup")
+def mockup_page():
+    """Luồng mockup cũ, hiển thị như một chế độ trong trang làm việc chung.
 
     Trước đây số ?v= phải sửa tay trong index.html, và quên sửa là trình duyệt
     giữ nguyên bản cũ trong cache: giao diện mới đi kèm code cũ -> bấm nút không
@@ -2002,6 +2622,19 @@ def index():
         return f'{name}?v={v}'
 
     html = re.sub(r'(app\.js|style\.css)\?v=\d+', stamp, html)
+    return HTMLResponse(html)
+
+
+@app.get("/")
+def index():
+    """Một trang chọn chế độ; giữ nguyên các workflow bên trong từng tab."""
+    html = (STATIC_DIR / "workspace.html").read_text(encoding="utf-8")
+
+    def stamp(match):
+        path = STATIC_DIR / match.group(1)
+        return f"{match.group(1)}?v={int(path.stat().st_mtime) if path.exists() else 0}"
+
+    html = re.sub(r'(workspace\.js|style\.css)\?v=\d+', stamp, html)
     return HTMLResponse(html)
 
 

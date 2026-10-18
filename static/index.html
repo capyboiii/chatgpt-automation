@@ -1,6 +1,7 @@
 <!doctype html>
 <html lang="vi" data-theme="dark">
 <head>
+  <script src="theme.js?v=1"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="description" content="Mockup Forge — Tạo mockup tự động với ChatGPT">
@@ -8,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css?v=52">
+  <link rel="stylesheet" href="style.css?v=56">
 </head>
 <body>
   <!-- Ambient backdrop glows -->
@@ -33,12 +34,11 @@
       </div>
 
       <div class="topbar-right">
-        <a href="/csv" class="btn action-btn sm" title="Sang trang chạy thẳng từ CSV">Chạy CSV →</a>
+        <a href="/csv-session" class="btn action-btn sm" title="Tạo ảnh từ bảng dữ liệu">Tạo từ bảng →</a>
         <!-- Tài khoản là thứ cài một lần rồi thôi: cho vào ngăn kéo, khỏi
              chiếm nửa màn hình đầu của việc chính. -->
         <button type="button" id="open-accounts" class="pool-stat-pill" title="Xem và quản lý tài khoản ChatGPT">
-          <span class="pulse-indicator"></span>
-          <span id="pool-info">0 tài khoản</span>
+          Tài khoản
         </button>
 
         <button id="theme-toggle" class="icon-btn" title="Đổi giao diện Sáng / Tối" aria-label="Toggle theme">
@@ -64,6 +64,16 @@
   <!-- Main Container -->
   <main class="app-container">
 
+    <section class="panel mode-intro" aria-labelledby="mode-title-mockup">
+      <div class="mode-intro-head">
+        <div class="mode-intro-copy">
+          <p class="mode-kicker">Tạo ảnh</p>
+          <h1 class="mode-title" id="mode-title-mockup">Tạo từ ảnh mẫu</h1>
+          <p class="mode-description">Chọn bộ ảnh và yêu cầu tạo ảnh.</p>
+        </div>
+      </div>
+    </section>
+
     <!-- 2 MAIN WORKSPACE COLUMNS -->
     <div class="main-columns">
 
@@ -72,7 +82,7 @@
         <div class="panel-head">
           <div class="panel-title-group">
             <div class="section-title-wrap">
-              <h2>Bộ Mockup</h2>
+              <h2><span class="step-number">1</span> Bộ ảnh mẫu</h2>
             </div>
             <span id="tpl-count" class="stat-pill-badge cyan">
               <span class="stat-dot cyan"></span>
@@ -103,7 +113,7 @@
           <div class="dropzone-icon-ring">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 8 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path></svg>
           </div>
-          <span class="dropzone-label">Kéo thả thư mục cha vào đây — mỗi thư mục con là một bộ</span>
+          <span class="dropzone-label">Thả thư mục ảnh vào đây</span>
         </label>
 
         <!-- Gallery Toolbar -->
@@ -130,11 +140,11 @@
         <div class="panel-head">
           <div class="panel-title-group">
             <div class="section-title-wrap">
-              <h2>Prompt Thiết Kế</h2>
+              <h2><span class="step-number">2</span> Yêu cầu tạo ảnh</h2>
             </div>
             <span id="prompt-select-badge" class="stat-pill-badge purple" hidden>
               <span class="stat-dot purple"></span>
-              <span class="stat-val" id="prompt-select-count">0 prompt</span>
+              <span class="stat-val" id="prompt-select-count">0 yêu cầu</span>
             </span>
           </div>
 
@@ -142,15 +152,15 @@
             <input type="file" id="csv-input" accept=".csv,text/csv" hidden>
             <button id="new-prompt" class="btn primary-subtle sm">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              Tạo Prompt
+              Thêm yêu cầu
             </button>
             <details class="menu">
               <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
               <div class="menu-pop">
-                <button type="button" id="btn-select-all-prompts" class="menu-item">Chọn tất cả prompt</button>
-                <button type="button" id="btn-prompt-template" class="menu-item">Sửa khuôn prompt chung</button>
-                <button type="button" id="btn-import-csv" class="menu-item">Nhập từ CSV</button>
-                <button type="button" id="clear-prompts" class="menu-item danger">Xoá hết prompt</button>
+                <button type="button" id="btn-select-all-prompts" class="menu-item">Chọn tất cả</button>
+                <button type="button" id="btn-prompt-template" class="menu-item">Cách gửi yêu cầu</button>
+                <button type="button" id="btn-import-csv" class="menu-item">Nhập từ bảng</button>
+                <button type="button" id="clear-prompts" class="menu-item danger">Xoá hết yêu cầu</button>
               </div>
             </details>
           </div>
@@ -162,7 +172,7 @@
         <!-- Prompt Form -->
         <form id="prompt-form" class="prompt-form-card" hidden>
           <div class="form-header">
-            <h4 id="pf-title">Prompt mới</h4>
+            <h4 id="pf-title">Yêu cầu mới</h4>
             <button type="button" id="pf-close-btn" class="icon-btn-close">✕</button>
           </div>
           <input type="hidden" id="pf-id">
@@ -171,24 +181,45 @@
             <input type="text" id="pf-name" placeholder="Ví dụ: Áo thun Graphic, Cốc sứ Vintage..." required autocomplete="off">
           </div>
           <div class="form-group">
-            <label class="form-label" for="pf-text">Nội dung câu lệnh ChatGPT</label>
-            <textarea id="pf-text" rows="4" placeholder="Mô tả chi tiết câu lệnh gửi tới ChatGPT..." required></textarea>
+            <label class="form-label" for="pf-text">Bạn muốn tạo ảnh như thế nào?</label>
+            <textarea id="pf-text" rows="4" placeholder="Viết nội dung bạn muốn gửi để tạo ảnh..." required></textarea>
           </div>
           <div class="form-actions">
             <button type="button" id="pf-cancel" class="btn ghost sm">Huỷ</button>
-            <button type="submit" class="btn primary sm">Lưu Prompt</button>
+            <button type="submit" class="btn primary sm">Lưu yêu cầu</button>
           </div>
         </form>
       </section>
 
     </div>
 
+    <section class="panel workflow-run-panel" aria-label="Bước 3: Tạo ảnh">
+      <div class="workflow-run-heading"><span class="step-number">3</span><h2>Tạo ảnh</h2></div>
+      <div class="runbar" id="main-runbar">
+        <div class="runbar-text">
+          <span class="runbar-status-pill" id="runbar-status-pill">
+            <span class="status-indicator-dot" id="runbar-status-dot"></span>
+            <span id="runbar-status-state">Sẵn sàng</span>
+          </span>
+          <span class="runbar-main-msg" id="runbar-main-msg">Chọn bộ ảnh và yêu cầu để bắt đầu</span>
+        </div>
+        <div class="runbar-actions">
+          <button type="button" id="btn-emergency-stop" class="btn danger sm glow-danger" hidden title="Dừng tất cả bộ đang chạy">
+            <span>■ Dừng tạo</span>
+          </button>
+          <button type="button" id="run-btn" class="btn primary glow-btn" disabled>
+            <span id="run-btn-text">Tạo ảnh</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- RESULTS SECTION (Full Width) -->
     <section class="panel panel-results" id="results-panel" hidden>
       <div class="panel-head">
         <div class="panel-title-group">
           <div class="section-title-wrap">
-            <h2>Kết Quả Mockup</h2>
+            <h2><span class="step-number">4</span> Ảnh đã tạo</h2>
           </div>
           <span id="results-stat" class="stat-pill-badge emerald">
             <span class="stat-dot emerald"></span>
@@ -197,17 +228,14 @@
         </div>
 
         <div class="results-actions">
-          <button type="button" id="btn-stop-results" class="btn danger sm" hidden title="Dừng khẩn cấp toàn bộ tác vụ đang chạy">
-            🛑 Dừng khẩn cấp
-          </button>
-          <a id="btn-download-all" href="/api/jobs/zip" class="btn primary-subtle sm">
+          <a id="btn-download-all" href="/api/jobs/zip?mode=mockup" class="btn primary-subtle sm">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-            Tải ZIP
+            Tải tất cả
           </a>
           <details class="menu">
             <summary class="btn action-btn sm menu-trigger" title="Thao tác khác">⋯</summary>
             <div class="menu-pop">
-              <button id="btn-clear-jobs" class="menu-item danger">Xoá kết quả</button>
+              <button id="btn-clear-jobs" class="menu-item danger">Xoá tất cả bộ ở mục này</button>
             </div>
           </details>
         </div>
@@ -234,9 +262,6 @@
           <div class="batch-subtrack-fill" id="batch-subtrack-fill" style="width: 0%;"></div>
         </div>
 
-        <div id="fleet-status-bar" class="fleet-status-bar" hidden>
-          <div id="fleet-chips" class="fleet-chips"></div>
-        </div>
       </div>
 
       <div id="quota-banner" class="quota-banner" hidden></div>
@@ -252,18 +277,23 @@
   <div class="drawer-backdrop" id="accounts-drawer-backdrop" hidden></div>
   <aside class="side-drawer" id="accounts-drawer" hidden>
     <div class="side-drawer-head">
-      <h3>Tài khoản ChatGPT</h3>
-      <span id="total-tabs" class="stat-pill-badge"><span class="stat-val">0 tài khoản</span></span>
+      <div class="side-drawer-title-row">
+        <h3>Tài khoản</h3>
+        <button type="button" class="icon-btn-close" id="btn-close-accounts" title="Đóng" aria-label="Đóng quản lý tài khoản">✕</button>
+      </div>
       <div class="side-drawer-head-actions">
+        <button type="button" id="open-manual-login" class="btn primary sm"
+                title="Thêm tài khoản và đăng nhập">
+          + Thêm thủ công
+        </button>
         <button type="button" id="open-bulk-login" class="btn primary-subtle sm"
-                title="Dán nhiều tài khoản, tool mở song song mỗi tài khoản một cửa sổ Chrome">
-          ⚡ Đăng nhập hàng loạt
+                title="Thêm nhiều tài khoản cùng lúc">
+          + Thêm hàng loạt
         </button>
         <button type="button" id="btn-clear-profiles" class="btn danger sm"
                 title="Xoá tất cả tài khoản và toàn bộ phiên đăng nhập đã lưu">
-          Xoá hết
+          Xoá tất cả
         </button>
-        <button type="button" class="icon-btn-close" id="btn-close-accounts">✕</button>
       </div>
     </div>
     <div class="side-drawer-body">
@@ -274,28 +304,6 @@
   </aside>
 
   <!-- FLOATING RUN BAR -->
-  <div class="runbar" id="main-runbar">
-    <div class="runbar-text">
-      <span class="runbar-status-pill" id="runbar-status-pill">
-        <span class="status-indicator-dot" id="runbar-status-dot"></span>
-        <span id="runbar-status-state">Sẵn sàng</span>
-      </span>
-      <span class="runbar-main-msg" id="runbar-main-msg">Chọn template và prompt để bắt đầu</span>
-    </div>
-
-    <div class="runbar-actions">
-      <!-- Nút Dừng Khẩn Cấp -->
-      <button type="button" id="btn-emergency-stop" class="btn danger sm glow-danger" hidden title="Dừng ngay lập tức toàn bộ tiến trình đang chạy">
-        <span>🛑 Dừng khẩn cấp</span>
-      </button>
-
-      <!-- Nút Chạy chính -->
-      <button type="button" id="run-btn" class="btn primary glow-btn" disabled>
-        <span id="run-btn-text">Tạo Mockup</span>
-      </button>
-    </div>
-  </div>
-
   <!-- LIGHTBOX MODAL -->
   <!-- ĐĂNG NHẬP HÀNG LOẠT -->
   <!-- KHUÔN PROMPT DÙNG CHUNG -->
@@ -303,12 +311,12 @@
     <div class="acc-modal-backdrop"></div>
     <div class="acc-modal-card" style="width:min(860px,96vw)">
       <div class="form-header">
-        <h4>Khuôn prompt dùng chung</h4>
+        <h4>Cách gửi yêu cầu</h4>
         <button type="button" id="tm-close" class="icon-btn-close">✕</button>
       </div>
       <p class="acc-modal-note">
         Mỗi lượt gen sẽ thay <code id="tm-placeholder">PASTE DESIGN PROMPT HERE</code>
-        bằng nội dung prompt thiết kế bạn chọn. Dòng đó bắt buộc phải còn trong khuôn.
+        bằng yêu cầu bạn chọn. Hãy giữ nguyên dòng này.
       </p>
       <div class="form-group">
         <textarea id="tm-text" rows="20" spellcheck="false"
@@ -364,12 +372,13 @@
     </div>
   </div>
 
-  <div id="lightbox-modal" class="lightbox-modal" hidden>
+  <div id="lightbox-modal" class="lightbox-modal" hidden role="dialog" aria-modal="true" aria-label="Xem ảnh mockup">
     <div class="lightbox-backdrop"></div>
     <div class="lightbox-content">
-      <button class="lightbox-close" id="lightbox-close" title="Đóng">✕</button>
+      <button class="lightbox-close" id="lightbox-close" type="button" title="Đóng" aria-label="Đóng ảnh">✕</button>
       <div class="lightbox-img-wrap">
-        <img id="lightbox-img" src="" alt="Preview">
+        <img id="lightbox-img" alt="Ảnh mockup phóng to">
+        <p id="lightbox-error" class="lightbox-error" hidden>Không mở được ảnh này. Hãy kiểm tra file kết quả hoặc tải ảnh về.</p>
       </div>
       <div class="lightbox-info">
         <span id="lightbox-caption" class="lightbox-caption"></span>
@@ -381,6 +390,6 @@
   <!-- TOAST CONTAINER -->
   <div id="toast-container" class="toast-container"></div>
 
-  <script src="app.js?v=48"></script>
+  <script src="app.js?v=51"></script>
 </body>
 </html>

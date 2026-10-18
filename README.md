@@ -1,5 +1,17 @@
 # Mockup Forge — ChatGPT Automation
 
+Trang `/` là không gian làm việc chung với hai chế độ: Mockup và CSV chung phiên.
+Trạng thái hàng chờ, Thinking High, tài khoản, dừng lượt
+và ZIP nằm ở thanh điều khiển chung; các thao tác riêng của từng chế độ hiện bên
+dưới. Các trang `/mockup` và `/csv-session` vẫn truy cập trực tiếp được; `/csv`
+chuyển sang `/csv-session`.
+
+Ở chế độ **CSV chung phiên**, có thể tải `.csv` hoặc `.xlsx`. Mỗi hàng mở một chat;
+giao diện đọc header để chọn cột prompt và thứ tự gửi (mặc định nhận các cột
+`PROMPT`). Có thể chọn thêm cột tạo `SIZE CHART`; `PRODUCT DESCRIPTION` chỉ gửi
+nếu người dùng chủ động chọn. Nếu không có cột
+`COLLECTION` hoặc `Style`, tên folder của Excel lấy từ tên file và `STT`.
+
 Tự động hoá: upload **template** + chọn **prompt design** → điều khiển ChatGPT web
 gen **ảnh mockup** (template đã gắn design) → tải về. Chạy **đa tab / đa profile**
 song song, mỗi mockup 1 phiên chat riêng.
@@ -30,10 +42,12 @@ run:
 collection tại một thời điểm, song song diễn ra ở mức tài khoản. Tăng số tab thì nhanh
 hơn nhưng đốt lượt của tài khoản đó nhanh tương ứng và dễ bị ChatGPT chặn, nên để 1.
 
-Bộ điều phối là **động**: tài khoản chọn thêm giữa lượt (hoặc dự bị được gọi vào) có
-worker trong vòng nửa giây, không phải chờ đội hình cũ nghỉ. Sau khi hết việc, pool
-nán lại `run.idle_exit_seconds` (mặc định 90s) với Chrome vẫn mở, nên lượt gen kế
-tiếp trong khoảng đó dùng lại luôn, khỏi tốn 10-30s bật lại cả đội.
+Bộ điều phối là **động**: mỗi collection là một việc trong hàng đợi chung. Lượt đầu
+chỉ bật tối đa số tài khoản bằng số collection; upload thêm sẽ bật thêm tài khoản
+nếu cần. Worker nào xong lấy việc kế tiếp; tài khoản hết lượt nhường collection
+cho tài khoản khác hoặc tài khoản dự bị. Tài khoản thêm giữa lượt có worker trong
+vòng khoảng nửa giây. Sau khi hết việc, pool chờ `run.idle_exit_seconds` (mặc định
+2 giây) rồi đóng Chrome.
 
 ### Gen lại mà không làm lại (chống hết token giữa chừng)
 Ảnh và thư mục được gom theo cấu trúc phân cấp:

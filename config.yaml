@@ -2,24 +2,24 @@ browser:
   headless: false
   profiles_dir: ./.chrome-profiles
   profiles:
-  - name: acc1
-    tabs: 1
-    email: nguyenthuong17933@gmail.com
-  - name: acc2
-    tabs: 1
-    email: yenyeusung@gmail.com
-  - name: acc3
-    tabs: 1
-    email: russobranham5854+1@gmail.com
   - name: acc4
     tabs: 1
     email: ethane.subway.4v+5ue8k0g@icloud.com
-  - name: acc6
-    tabs: 1
-    email: sdfghgfhgh+2346ersd@gmail.com
   - name: acc5
     tabs: 1
     email: hoffmannbremer574@googlemail.com
+  - name: acc1
+    tabs: 1
+    email: munchie.plumper-5x@icloud.com
+  - name: acc2
+    tabs: 1
+    email: numbers-sturdy-6t@icloud.com
+  - name: acc3
+    tabs: 1
+    email: vicious.lessors-4l@icloud.com
+  - name: acc6
+    tabs: 1
+    email: stucco.irons-5b@icloud.com
   tabs_per_account: 1
   generation_timeout: 300
   nav_timeout: 90
@@ -32,7 +32,7 @@ run:
   quiet_limit_seconds: 10
   batch_timeout: 900
   no_progress_timeout: 180
-  thinking: vừa
+  thinking: cao
 login:
   parallel: 0
   stagger_seconds: 5

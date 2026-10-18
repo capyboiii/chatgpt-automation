@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="vi" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Mockup Forge — Không gian làm việc</title>
+  <script src="theme.js?v=1"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=56">
+  <style>
+    .workspace{max-width:1360px;margin:0 auto;padding:22px 20px 48px}
+    #btn-accounts{min-height:36px;white-space:nowrap}
+    .mode-tabs{display:grid;grid-template-columns:1fr 1fr;align-items:stretch;gap:8px;margin-bottom:12px;padding:5px;border:1px solid var(--border);border-radius:var(--radius-md);background:var(--bg-panel)}
+    .mode-tab{display:flex;align-items:center;justify-content:center;gap:8px;text-align:center;padding:12px 14px;color:var(--text-dim);background:transparent;border:1px solid transparent;border-radius:var(--radius-sm);cursor:pointer;transition:border-color .2s,background .2s,color .2s}
+    .mode-tab:hover{color:var(--text);background:var(--bg-card)}
+    .mode-tab[aria-selected="true"]{border-color:var(--border-accent);background:var(--accent-soft);color:var(--text);box-shadow:0 2px 10px rgba(10,30,46,.07)}
+    .mode-tab strong{font:700 .86rem var(--f-display)}
+    .mode-tab span{display:none}
+    .workspace-status{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 14px;margin-bottom:14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-panel);font-size:.76rem;color:var(--text-dim)}
+    .workspace-status .status-item{padding-right:10px;border-right:1px solid var(--border-strong)}
+    .workspace-status .status-item:last-child{border:0;padding:0}
+    .workspace-status strong{color:var(--text)}
+    .workspace-alert{padding:10px 13px;margin-bottom:12px;border:1px solid var(--warn);border-radius:var(--radius-xs);color:var(--text-dim);background:rgba(245,158,11,.08);font-size:.8rem}
+    .mode-frame{display:block;width:100%;height:700px;min-height:0;border:0;background:transparent;overflow:hidden}
+    .mode-frame[hidden]{display:none}
+    @media(max-width:760px){.workspace{padding:12px 12px 30px}.mode-tabs{gap:4px}.mode-tab{display:grid;gap:1px;padding:10px 4px}.mode-tab strong{font-size:.78rem}.workspace-status{line-height:1.5}}
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="topbar-inner">
+    <div class="brand"><div class="brand-logo"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg></div><div class="brand-text-group"><span class="brand-name">Mockup<b>Forge</b></span></div></div>
+    <div class="topbar-right"><button id="btn-accounts" class="btn primary-subtle sm" title="Xem và thêm tài khoản">Tài khoản</button><button id="theme-toggle" class="btn action-btn sm" type="button" title="Đổi giao diện Sáng / Tối"><span class="theme-label">Chế độ tối</span></button></div>
+  </div></header>
+  <main class="workspace">
+    <div class="mode-tabs" role="tablist" aria-label="Chế độ tạo ảnh">
+      <button class="mode-tab" id="tab-mockup" role="tab" aria-selected="false" aria-controls="frame-mockup" data-mode="mockup"><strong>Tạo từ ảnh mẫu</strong></button>
+      <button class="mode-tab" id="tab-csv-session" role="tab" aria-selected="false" aria-controls="frame-csv-session" data-mode="csv-session"><strong>Tạo từ bảng</strong></button>
+    </div>
+    <div class="workspace-status" aria-live="polite"><span class="status-item" id="summary-run">Đang tải…</span><span class="status-item" id="summary-queue"></span></div>
+    <div id="workspace-alert" class="workspace-alert" hidden></div>
+    <iframe id="frame-mockup" class="mode-frame" title="Chế độ Mockup" data-src="/mockup" hidden></iframe>
+    <iframe id="frame-csv-session" class="mode-frame" title="Chế độ CSV chung phiên" data-src="/csv-session" hidden></iframe>
+  </main>
+  <script src="workspace.js?v=4"></script>
+</body>
+</html>

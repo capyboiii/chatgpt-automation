@@ -1,0 +1,757 @@
+{
+  "saved_at": 1792003697.8492513,
+  "collections": [
+    {
+      "id": "a72e9f7b",
+      "name": "ADI_AOP_CUFFSHORT_top10_20-(2)__20 · gen lại ảnh",
+      "prompt": "Commercial apparel photograph, square 1:1: shot 2 of a 3-image product-page set for the LSU TIGERS Tie-Dye all-over-print cuffed shorts.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the prompt 1 output). The shorts here are the IDENTICAL shorts from image 1: same cut, wide rolled cuffs, two gold waist buttons, same print, every motif in the same place and size. Do not redesign, recolour, add or remove any motif. Build this image from image 1 directly, never from another generated image of the set.\n\nPRINT MAP (positions only, copied from image 1): the purple, gold and white spiral tie-dye centred on the right leg and running over both cuffs; the logo on the left hip; the figure at the centre of the spiral on the right leg.\n\nSHOT ROLE - PRINT DETAIL:\nTop-down flat lay on a cream linen sheet: the shorts laid flat with one cuff unrolled halfway to show the print continuing on the turned-up fabric; close enough that the print edges, the logo and the figure are sharp and visibly flat-printed into the fabric; a gift box half in frame at the top, its lid printed with one line that reads exactly: LSU TIGERS.\n\nLIGHT:\nOne light source: soft window light from the top left.\n\nKEEP:\nEvery printed word spelled exactly as listed.",
+      "prompt_name": "PROMPT 2 - DETAIL",
+      "jobs": [
+        {
+          "id": "02db2fdf",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Commercial apparel photograph, square 1:1: shot 2 of a 3-image product-page set for the LSU TIGERS Tie-Dye all-over-print cuffed shorts.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the prompt 1 output). The shorts here are the IDENTICAL shorts from image 1: same cut, wide rolled cuffs, two gold waist buttons, same print, every motif in the same place and size. Do not redesign, recolour, add or remove any motif. Build this image from image 1 directly, never from another generated image of the set.\n\nPRINT MAP (positions only, copied from image 1): the purple, gold and white spiral tie-dye centred on the right leg and running over both cuffs; the logo on the left hip; the figure at the centre of the spiral on the right leg.\n\nSHOT ROLE - PRINT DETAIL:\nTop-down flat lay on a cream linen sheet: the shorts laid flat with one cuff unrolled halfway to show the print continuing on the turned-up fabric; close enough that the print edges, the logo and the figure are sharp and visibly flat-printed into the fabric; a gift box half in frame at the top, its lid printed with one line that reads exactly: LSU TIGERS.\n\nLIGHT:\nOne light source: soft window light from the top left.\n\nKEEP:\nEvery printed word spelled exactly as listed.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_AOP_CUFFSHORT_top10_20-(2)__20\\4.png",
+          "result_url": "/files/outputs/ADI_AOP_CUFFSHORT_top10_20-(2)__20/4.png",
+          "folder": "ADI_AOP_CUFFSHORT_top10_20-(2)__20",
+          "results": [
+            "/files/outputs/ADI_AOP_CUFFSHORT_top10_20-(2)__20/4.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0",
+          "source_job_id": "02d961b3",
+          "source_image_url": "/files/outputs/ADI_AOP_CUFFSHORT_top10_20-(2)__20/2.png"
+        }
+      ],
+      "free": true,
+      "free_sequence": true,
+      "regenerate_image": true,
+      "hidden": true,
+      "required_profile": "acc5",
+      "ran_on": "acc5",
+      "chat_url": "https://chatgpt.com/c/6ace69a8-25bc-83ec-b451-1964b8252393",
+      "source_image_index": 0,
+      "source_image_path": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_AOP_CUFFSHORT_top10_20-(2)__20\\2.png",
+      "status": "done",
+      "worker": "acc5#0",
+      "error": null,
+      "done_count": 1,
+      "total_count": 1
+    },
+    {
+      "id": "5a85a4af",
+      "name": "ADI_NAILS_flat_player_top10__1",
+      "folder": "ADI_NAILS_flat_player_top10__1",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of SAN FRANCISCO 49ERS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep 49ers red French tip edged by a thin metallic gold line, and the 49ers logo - a red oval with a metallic-gold rim and the letters SF in white painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a red home jersey with a large white number 49 on the back and no name; gold pants; the back of a gold helmet with a red stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted gold helmet with a red stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy 49ers red with a single metallic gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a red home jersey with a large white number 49 on the back and no name; gold pants; the back of a gold helmet with a red stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted 49ers red foam fan finger, index finger pointing up, on a metallic gold nail, no lettering.\n5. REST: a flat cream nail with a deep 49ers red French tip edged by a thin metallic gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: 49ers red and metallic gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: NINERS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc1#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "28af1fda",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of SAN FRANCISCO 49ERS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep 49ers red French tip edged by a thin metallic gold line, and the 49ers logo - a red oval with a metallic-gold rim and the letters SF in white painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a red home jersey with a large white number 49 on the back and no name; gold pants; the back of a gold helmet with a red stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted gold helmet with a red stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy 49ers red with a single metallic gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a red home jersey with a large white number 49 on the back and no name; gold pants; the back of a gold helmet with a red stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted 49ers red foam fan finger, index finger pointing up, on a metallic gold nail, no lettering.\n5. REST: a flat cream nail with a deep 49ers red French tip edged by a thin metallic gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: 49ers red and metallic gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: NINERS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__1\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__1/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__1",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__1/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc1#0"
+        },
+        {
+          "id": "b2161cf5",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the SAN FRANCISCO 49ERS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 49 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__1\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__1/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__1",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__1/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc1#0"
+        },
+        {
+          "id": "23da12b9",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the SAN FRANCISCO 49ERS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with 49ers red and metallic gold tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__1\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__1/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__1",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__1/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc1#0"
+        }
+      ],
+      "ran_on": "acc1",
+      "chat_url": "https://chatgpt.com/c/6acfcaf1-9d58-83ec-8d71-1e02a18ddafe"
+    },
+    {
+      "id": "c8c0af3c",
+      "name": "ADI_NAILS_flat_player_top10__2",
+      "folder": "ADI_NAILS_flat_player_top10__2",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of MIAMI HURRICANES 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep orange French tip edged by a thin green line, and a bold letter U split down the middle, the left half orange and the right half green, with a white outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a green home jersey with a large white number 1 on the back and no name; white pants; the back of a white helmet with an orange and green stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted white helmet with an orange and green stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy orange with a single green stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a green home jersey with a large white number 1 on the back and no name; white pants; the back of a white helmet with an orange and green stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted orange foam fan finger, index finger pointing up, on a green nail, no lettering.\n5. REST: a flat cream nail with a deep orange French tip edged by a thin green line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: orange and green. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: CANES.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc5#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "03692f7d",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of MIAMI HURRICANES 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep orange French tip edged by a thin green line, and a bold letter U split down the middle, the left half orange and the right half green, with a white outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a green home jersey with a large white number 1 on the back and no name; white pants; the back of a white helmet with an orange and green stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted white helmet with an orange and green stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy orange with a single green stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a green home jersey with a large white number 1 on the back and no name; white pants; the back of a white helmet with an orange and green stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted orange foam fan finger, index finger pointing up, on a green nail, no lettering.\n5. REST: a flat cream nail with a deep orange French tip edged by a thin green line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: orange and green. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: CANES.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__2\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__2/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__2",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__2/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0"
+        },
+        {
+          "id": "915d94b8",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the MIAMI HURRICANES \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__2\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__2/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__2",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__2/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0"
+        },
+        {
+          "id": "8025b3d1",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the MIAMI HURRICANES \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with orange and green tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__2\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__2/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__2",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__2/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0"
+        }
+      ],
+      "ran_on": "acc5",
+      "chat_url": "https://chatgpt.com/c/6acfcad2-9d38-83ec-bb2c-642521f4749e"
+    },
+    {
+      "id": "e7a61670",
+      "name": "ADI_NAILS_flat_player_top10__3",
+      "folder": "ADI_NAILS_flat_player_top10__3",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of NOTRE DAME FIGHTING IRISH 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep navy blue French tip edged by a thin metallic gold line, and the letters N and D interlocked as one monogram in metallic gold with a thin navy outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a navy home jersey with a large white number 1 on the back and no name; gold pants; the back of a plain shiny gold helmet; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted plain shiny gold helmet seen from the side, the face mask dark inside, no face.\n5. REST: glossy navy blue with a single metallic gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a navy home jersey with a large white number 1 on the back and no name; gold pants; the back of a plain shiny gold helmet; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted navy blue foam fan finger, index finger pointing up, on a metallic gold nail, no lettering.\n5. REST: a flat cream nail with a deep navy blue French tip edged by a thin metallic gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: navy blue and metallic gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: IRISH.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc2#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "0f42fdcc",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of NOTRE DAME FIGHTING IRISH 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep navy blue French tip edged by a thin metallic gold line, and the letters N and D interlocked as one monogram in metallic gold with a thin navy outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a navy home jersey with a large white number 1 on the back and no name; gold pants; the back of a plain shiny gold helmet; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted plain shiny gold helmet seen from the side, the face mask dark inside, no face.\n5. REST: glossy navy blue with a single metallic gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a navy home jersey with a large white number 1 on the back and no name; gold pants; the back of a plain shiny gold helmet; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted navy blue foam fan finger, index finger pointing up, on a metallic gold nail, no lettering.\n5. REST: a flat cream nail with a deep navy blue French tip edged by a thin metallic gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: navy blue and metallic gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: IRISH.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__3\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__3/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__3",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__3/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc2#0"
+        },
+        {
+          "id": "7baa37ac",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the NOTRE DAME FIGHTING IRISH \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__3\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__3/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__3",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__3/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc2#0"
+        },
+        {
+          "id": "1b90a01e",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the NOTRE DAME FIGHTING IRISH \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with navy blue and metallic gold tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__3\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__3/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__3",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__3/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc2#0"
+        }
+      ],
+      "ran_on": "acc2",
+      "chat_url": "https://chatgpt.com/c/6acfcad9-c3f0-83ec-85d6-e3f34f5a6591"
+    },
+    {
+      "id": "0f8bcbde",
+      "name": "ADI_NAILS_flat_player_top10__4",
+      "folder": "ADI_NAILS_flat_player_top10__4",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of OHIO STATE BUCKEYES 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep scarlet French tip edged by a thin grey line, and a scarlet block letter O with a grey outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a scarlet home jersey with a large white number 1 on the back and no name; silver-grey pants; the back of a silver helmet with a scarlet and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted silver helmet with a scarlet and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy scarlet with a single grey stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a scarlet home jersey with a large white number 1 on the back and no name; silver-grey pants; the back of a silver helmet with a scarlet and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted scarlet foam fan finger, index finger pointing up, on a grey nail, no lettering.\n5. REST: a flat cream nail with a deep scarlet French tip edged by a thin grey line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: scarlet and grey. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: BUCKEYES.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc4#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "027b0ce0",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of OHIO STATE BUCKEYES 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep scarlet French tip edged by a thin grey line, and a scarlet block letter O with a grey outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a scarlet home jersey with a large white number 1 on the back and no name; silver-grey pants; the back of a silver helmet with a scarlet and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted silver helmet with a scarlet and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy scarlet with a single grey stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a scarlet home jersey with a large white number 1 on the back and no name; silver-grey pants; the back of a silver helmet with a scarlet and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted scarlet foam fan finger, index finger pointing up, on a grey nail, no lettering.\n5. REST: a flat cream nail with a deep scarlet French tip edged by a thin grey line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: scarlet and grey. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: BUCKEYES.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__4\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__4/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__4",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__4/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc4#0"
+        },
+        {
+          "id": "8a899c4e",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the OHIO STATE BUCKEYES \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__4\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__4/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__4",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__4/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc4#0"
+        },
+        {
+          "id": "5dae3a26",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the OHIO STATE BUCKEYES \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with scarlet and grey tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__4\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__4/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__4",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__4/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc4#0"
+        }
+      ],
+      "ran_on": "acc4",
+      "chat_url": "https://chatgpt.com/c/6acfcad9-7e98-83ec-b4cc-a50cbec38c70"
+    },
+    {
+      "id": "60972ef5",
+      "name": "ADI_NAILS_flat_player_top10__5",
+      "folder": "ADI_NAILS_flat_player_top10__5",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of FLORIDA GATORS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep royal blue French tip edged by a thin orange line, and the word Gators in orange script letters with a thick royal-blue outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a royal-blue home jersey with a large orange number 1 with a white edge on the back and no name; white pants; the back of a royal-blue helmet with an orange stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted royal-blue helmet with an orange stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy royal blue with a single orange stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a royal-blue home jersey with a large orange number 1 with a white edge on the back and no name; white pants; the back of a royal-blue helmet with an orange stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted royal blue foam fan finger, index finger pointing up, on a orange nail, no lettering.\n5. REST: a flat cream nail with a deep royal blue French tip edged by a thin orange line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: royal blue and orange. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: GATORS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc3#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "05621a9c",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of FLORIDA GATORS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep royal blue French tip edged by a thin orange line, and the word Gators in orange script letters with a thick royal-blue outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a royal-blue home jersey with a large orange number 1 with a white edge on the back and no name; white pants; the back of a royal-blue helmet with an orange stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted royal-blue helmet with an orange stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy royal blue with a single orange stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a royal-blue home jersey with a large orange number 1 with a white edge on the back and no name; white pants; the back of a royal-blue helmet with an orange stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted royal blue foam fan finger, index finger pointing up, on a orange nail, no lettering.\n5. REST: a flat cream nail with a deep royal blue French tip edged by a thin orange line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: royal blue and orange. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: GATORS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__5\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__5/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__5",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__5/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc3#0"
+        },
+        {
+          "id": "daa65638",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the FLORIDA GATORS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__5\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__5/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__5",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__5/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc3#0"
+        },
+        {
+          "id": "42904c4f",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the FLORIDA GATORS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with royal blue and orange tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__5\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__5/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__5",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__5/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc3#0"
+        }
+      ],
+      "ran_on": "acc3",
+      "chat_url": "https://chatgpt.com/c/6acfcad9-5f14-83ec-83c0-66aae1316e40"
+    },
+    {
+      "id": "7052be53",
+      "name": "ADI_NAILS_flat_player_top10__6",
+      "folder": "ADI_NAILS_flat_player_top10__6",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of KANSAS CITY CHIEFS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep red French tip edged by a thin gold line, and a white arrowhead shape pointing left with a thick red outline and the interlocking letters KC in red inside it painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a red home jersey with a large white number 1 on the back and no name; white pants; the back of a red helmet with a white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted red helmet with a white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy red with a single gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a red home jersey with a large white number 1 on the back and no name; white pants; the back of a red helmet with a white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted red foam fan finger, index finger pointing up, on a gold nail, no lettering.\n5. REST: a flat cream nail with a deep red French tip edged by a thin gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: red and gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: CHIEFS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc1#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "7a96964a",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of KANSAS CITY CHIEFS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep red French tip edged by a thin gold line, and a white arrowhead shape pointing left with a thick red outline and the interlocking letters KC in red inside it painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a red home jersey with a large white number 1 on the back and no name; white pants; the back of a red helmet with a white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted red helmet with a white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy red with a single gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a red home jersey with a large white number 1 on the back and no name; white pants; the back of a red helmet with a white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted red foam fan finger, index finger pointing up, on a gold nail, no lettering.\n5. REST: a flat cream nail with a deep red French tip edged by a thin gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: red and gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: CHIEFS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__6\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__6/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__6",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__6/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc1#0"
+        },
+        {
+          "id": "fd71090c",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the KANSAS CITY CHIEFS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__6\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__6/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__6",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__6/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc1#0"
+        },
+        {
+          "id": "d6c44df2",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the KANSAS CITY CHIEFS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with red and gold tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__6\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__6/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__6",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__6/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc1#0"
+        }
+      ],
+      "ran_on": "acc1",
+      "chat_url": "https://chatgpt.com/c/6acfccf1-b318-83ec-95a1-c758674d9e15"
+    },
+    {
+      "id": "822502db",
+      "name": "ADI_NAILS_flat_player_top10__7",
+      "folder": "ADI_NAILS_flat_player_top10__7",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of DALLAS COWBOYS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep navy blue French tip edged by a thin metallic silver line, and a navy blue five-point star with a white-and-silver outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a white home jersey with a large navy number 1 on the back and no name; metallic silver-blue pants; the back of a metallic silver helmet with a navy and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted metallic silver helmet with a navy and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy navy blue with a single metallic silver stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a white home jersey with a large navy number 1 on the back and no name; metallic silver-blue pants; the back of a metallic silver helmet with a navy and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted navy blue foam fan finger, index finger pointing up, on a metallic silver nail, no lettering.\n5. REST: a flat cream nail with a deep navy blue French tip edged by a thin metallic silver line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: navy blue and metallic silver. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: COWBOYS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc3#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "31aee0ea",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of DALLAS COWBOYS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep navy blue French tip edged by a thin metallic silver line, and a navy blue five-point star with a white-and-silver outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a white home jersey with a large navy number 1 on the back and no name; metallic silver-blue pants; the back of a metallic silver helmet with a navy and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted metallic silver helmet with a navy and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy navy blue with a single metallic silver stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a white home jersey with a large navy number 1 on the back and no name; metallic silver-blue pants; the back of a metallic silver helmet with a navy and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted navy blue foam fan finger, index finger pointing up, on a metallic silver nail, no lettering.\n5. REST: a flat cream nail with a deep navy blue French tip edged by a thin metallic silver line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: navy blue and metallic silver. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: COWBOYS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__7\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__7/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__7",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__7/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc3#0"
+        },
+        {
+          "id": "dc1e3cfd",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the DALLAS COWBOYS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__7\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__7/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__7",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__7/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc3#0"
+        },
+        {
+          "id": "5c88bb8f",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the DALLAS COWBOYS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with navy blue and metallic silver tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__7\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__7/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__7",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__7/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc3#0"
+        }
+      ],
+      "ran_on": "acc3",
+      "chat_url": "https://chatgpt.com/c/6acfcc01-7db0-83ec-b69b-26bb7df6a258"
+    },
+    {
+      "id": "600ce689",
+      "name": "ADI_NAILS_flat_player_top10__8",
+      "folder": "ADI_NAILS_flat_player_top10__8",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of ALABAMA CRIMSON TIDE 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep crimson French tip edged by a thin white line, and a crimson script capital letter A painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a crimson home jersey with a large white number 1 on the back and no name; white pants; the back of a crimson helmet with a white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted crimson helmet with a white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy crimson with a single white stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a crimson home jersey with a large white number 1 on the back and no name; white pants; the back of a crimson helmet with a white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted crimson foam fan finger, index finger pointing up, on a white nail, no lettering.\n5. REST: a flat cream nail with a deep crimson French tip edged by a thin white line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: crimson and white. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: ROLL TIDE.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc4#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "f2a6f92e",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of ALABAMA CRIMSON TIDE 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep crimson French tip edged by a thin white line, and a crimson script capital letter A painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a crimson home jersey with a large white number 1 on the back and no name; white pants; the back of a crimson helmet with a white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted crimson helmet with a white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy crimson with a single white stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a crimson home jersey with a large white number 1 on the back and no name; white pants; the back of a crimson helmet with a white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted crimson foam fan finger, index finger pointing up, on a white nail, no lettering.\n5. REST: a flat cream nail with a deep crimson French tip edged by a thin white line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: crimson and white. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: ROLL TIDE.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__8\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__8/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__8",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__8/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc4#0"
+        },
+        {
+          "id": "486ef5ee",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the ALABAMA CRIMSON TIDE \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__8\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__8/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__8",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__8/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc4#0"
+        },
+        {
+          "id": "88344198",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the ALABAMA CRIMSON TIDE \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with crimson and white tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__8\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__8/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__8",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__8/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc4#0"
+        }
+      ],
+      "ran_on": "acc4",
+      "chat_url": "https://chatgpt.com/c/6acfcc08-fe20-83ec-9362-5402fe38dbef"
+    },
+    {
+      "id": "d8091935",
+      "name": "ADI_NAILS_flat_player_top10__9",
+      "folder": "ADI_NAILS_flat_player_top10__9",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of GEORGIA BULLDOGS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep red French tip edged by a thin black line, and a bold red capital letter G with a black outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a red home jersey with a large white number 1 on the back and no name; silver pants; the back of a red helmet with a black and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted red helmet with a black and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy red with a single black stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a red home jersey with a large white number 1 on the back and no name; silver pants; the back of a red helmet with a black and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted red foam fan finger, index finger pointing up, on a black nail, no lettering.\n5. REST: a flat cream nail with a deep red French tip edged by a thin black line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: red and black. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: DAWGS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc5#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "b7ffcd40",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of GEORGIA BULLDOGS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep red French tip edged by a thin black line, and a bold red capital letter G with a black outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a red home jersey with a large white number 1 on the back and no name; silver pants; the back of a red helmet with a black and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted red helmet with a black and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy red with a single black stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a red home jersey with a large white number 1 on the back and no name; silver pants; the back of a red helmet with a black and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted red foam fan finger, index finger pointing up, on a black nail, no lettering.\n5. REST: a flat cream nail with a deep red French tip edged by a thin black line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: red and black. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: DAWGS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__9\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__9/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__9",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__9/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0"
+        },
+        {
+          "id": "3adc7c9f",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the GEORGIA BULLDOGS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__9\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__9/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__9",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__9/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0"
+        },
+        {
+          "id": "493381f4",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the GEORGIA BULLDOGS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with red and black tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__9\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__9/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__9",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__9/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc5#0"
+        }
+      ],
+      "ran_on": "acc5",
+      "chat_url": "https://chatgpt.com/c/6acfcc0c-607c-83ec-8a66-66b0d2ea380f"
+    },
+    {
+      "id": "5b3972a9",
+      "name": "ADI_NAILS_flat_player_top10__10",
+      "folder": "ADI_NAILS_flat_player_top10__10",
+      "prompt": "Macro product photograph, square 1:1, of ONE handmade set of LSU TIGERS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep purple French tip edged by a thin gold line, and the letters LSU in bold purple capitals with a gold outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a purple jersey with a large gold number 1 on the back and no name; gold pants; the back of a gold helmet with a purple and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted gold helmet with a purple and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy purple with a single gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a purple jersey with a large gold number 1 on the back and no name; gold pants; the back of a gold helmet with a purple and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted purple foam fan finger, index finger pointing up, on a gold nail, no lettering.\n5. REST: a flat cream nail with a deep purple French tip edged by a thin gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: purple and gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: TIGERS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+      "prompt_name": "PROMPT 1 - HERO",
+      "free": true,
+      "free_sequence": true,
+      "templates": [],
+      "status": "done",
+      "worker": "acc2#0",
+      "error": null,
+      "jobs": [
+        {
+          "id": "978a1355",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1, of ONE handmade set of LSU TIGERS 3D-effect printed press-on nails.\n\nSCENE:\nA clear square hinged plastic case with its lid open at the top and a strip of masking tape on the inside of the lid, on a dark charcoal surface. The camera is close and low, about 35 degrees above the table, so the case fills the frame and the thin flat profile of every nail is visible. Inside, ten long coffin-shaped press-on nails, all the same length, lie in two rows of five.\n\nTHE TEN NAILS:\nTop row, left to right:\n1. LOGO: a cream nail with a deep purple French tip edged by a thin gold line, and the letters LSU in bold purple capitals with a gold outline painted large in the centre, shaded so it looks like a domed badge.\n2. QUARTERBACK, SEEN FROM BEHIND: a painted football player seen from the back, standing with his throwing arm cocked back and a tiny football raised behind his helmet; a purple jersey with a large gold number 1 on the back and no name; gold pants; the back of a gold helmet with a purple and white stripe; only the back of the player is visible, no face; fabric folds and grass stains painted.\n3. FOOTBALL: the whole nail is painted as ONE brown leather football with pebbled grain and shaded white laces.\n4. HELMET: a cream nail with a painted gold helmet with a purple and white stripe seen from the side, the face mask dark inside, no face.\n5. REST: glossy purple with a single gold stripe down the centre, flat.\nBottom row, left to right:\n1. LOGO: the same logo nail as top row 1.\n2. RECEIVER, SEEN FROM BEHIND: a painted football player seen from the back, running away from the viewer toward a soft green field, a tiny football tucked under one arm; a purple jersey with a large gold number 1 on the back and no name; gold pants; the back of a gold helmet with a purple and white stripe; no face visible.\n3. TURF: painted green turf blades with a white yard line and a painted gold goalpost.\n4. FOAM FINGER: a painted purple foam fan finger, index finger pointing up, on a gold nail, no lettering.\n5. REST: a flat cream nail with a deep purple French tip edged by a thin gold line.\n\nPRINT AND REALISM (3D effect, flat surface):\n- Every design is a hyper-realistic painted illustration printed under the gel: full shading, painted highlights and painted drop shadows make each picture look like it pops out, but the nail surface is perfectly smooth and flat. Nothing rises above the nail.\n- Proof of flatness: one straight soft window reflection runs unbroken across every nail, passing over the pictures without bending; seen at this low angle, each nail is a thin flat shell with a clean even edge; no picture casts a shadow on the case floor.\n- Real textures painted in fine detail: fabric folds, grass stains, leather grain, helmet shine; all under one thick glass-smooth top coat.\n\nTEAM IDENTITY:\nColours: purple and gold. Use ONLY the motifs listed above. Do not add any other logo, number, name or slogan. The two logo nails are the first thing the eye reads.\n\nPROOF DETAIL:\nThe masking tape strip carries handwritten pencil letters that read exactly: TIGERS.\n\nLIGHT:\nOne light source: soft daylight from the upper left, crisp highlights on the glossy top coat, only the soft shadow of each nail shell on the case.\n\nKEEP:\nEvery word and number spelled exactly as listed; exactly 10 nails; every nail surface smooth and flat; both players seen only from behind, no face anywhere; the back of every helmet plain, with no lettering.\n\nAVOID:\nwatermark, extra text, extra nails, a hand in the frame, melted or blurry details, plastic toy look, raised charms, rhinestones, sculpted or embossed relief.",
+          "prompt_name": "PROMPT 1 - HERO",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__10\\1.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__10/1.png",
+          "folder": "ADI_NAILS_flat_player_top10__10",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__10/1.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc2#0"
+        },
+        {
+          "id": "602c3643",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Macro product photograph, square 1:1: shot 2 of a 3-image set for the LSU TIGERS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - PRINT DETAIL:\nClose-up of three nails from image 1 lying side by side on the dark charcoal surface: the quarterback nail in the centre, the logo nail on the left and the helmet nail on the right. Close enough to see the painted shading that makes the player look 3D: jersey folds, the number 1 on the back, grass stains, the shine on the helmet, whose back is plain with no lettering. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Seen at a low angle, each nail is a thin flat shell. Shallow depth of field, the background falling into soft darkness.\n\nLIGHT:\nOne light source: soft daylight from the upper left.\n\nKEEP:\nEvery word and number spelled exactly as listed; only these three nails in frame; the player seen only from behind, no face.",
+          "prompt_name": "PROMPT 2 - DETAIL",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__10\\2.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__10/2.png",
+          "folder": "ADI_NAILS_flat_player_top10__10",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__10/2.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc2#0"
+        },
+        {
+          "id": "1fdf1159",
+          "template": "",
+          "template_name": "",
+          "template_url": "",
+          "prompt": "Lifestyle photograph, square 1:1: shot 3 of a 3-image set for the LSU TIGERS \"Game Day Hero\" 3D-effect printed press-on nails.\n\nPRODUCT LOCK:\nAttach image 1 of this set (the hero image). The nails here are the IDENTICAL nails from image 1: same ten designs, same colours, same long coffin shape. Every design is a flat printed illustration under a smooth glossy gel, exactly as in image 1. Do not redesign, recolour, add or remove anything. Build this image from image 1 directly, never from another generated image of the set.\n\nSHOT ROLE - WORN AT THE TAILGATE:\nA plain brown leather football with white laces and no text fills the lower half of the frame, and ONE woman's hand wraps around it. The hand has exactly five fingers and wears exactly five nails, the top row of image 1, one per finger: thumb = the logo nail, index = the quarterback nail, middle = the football nail, ring = the helmet nail, little finger = the striped nail. The other five nails are not in this image; nothing is stuck on the ball. One straight soft window reflection runs unbroken across the nails, passing over the pictures without bending; nothing rises above the nail surface. Behind, a sunny stadium parking lot on game day with purple and gold tents softly out of focus. Natural skin texture with fine lines on the knuckles.\n\nLIGHT:\nOne light source: warm afternoon sun from the left.\n\nKEEP:\nThe hand holding the football; only the hand and the ball in sharp focus; no face in frame; exactly five nails visible, each on its own finger; the painted player seen only from behind.",
+          "prompt_name": "PROMPT 3 - WORN",
+          "prompt_only": false,
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\designs\\ADI_NAILS_flat_player_top10__10\\3.png",
+          "result_url": "/files/outputs/ADI_NAILS_flat_player_top10__10/3.png",
+          "folder": "ADI_NAILS_flat_player_top10__10",
+          "results": [
+            "/files/outputs/ADI_NAILS_flat_player_top10__10/3.png"
+          ],
+          "status": "done",
+          "error": null,
+          "worker": "acc2#0"
+        }
+      ],
+      "ran_on": "acc2",
+      "chat_url": "https://chatgpt.com/c/6acfcc68-49bc-83ec-b334-7972155d381f"
+    }
+  ]
+}

@@ -2,7 +2,28 @@
 // Mockup Forge — Clean & Fast Frontend Logic
 // ==========================================================================
 
-const $ = (s) => document.querySelector(s);
+let overlayHost = document;
+try {
+  if (window.parent !== window && window.parent.location.origin === location.origin) {
+    overlayHost = window.parent.document;
+  }
+} catch (_) { /* Mở độc lập hoặc parent khác origin. */ }
+
+// Các lớp phủ phải nằm ngoài iframe để không bị cắt và luôn vừa viewport.
+const portaledNodes = [];
+if (overlayHost !== document) {
+  for (const id of ["accounts-drawer-backdrop", "accounts-drawer", "tpl-modal",
+    "bulk-modal", "login-modal", "toast-container"]) {
+    const node = document.getElementById(id);
+    if (node) {
+      overlayHost.body.appendChild(node);
+      portaledNodes.push(node);
+    }
+  }
+  window.addEventListener("pagehide", () => portaledNodes.forEach(node => node.remove()));
+}
+
+const $ = (s) => document.querySelector(s) || (overlayHost !== document ? overlayHost.querySelector(s) : null);
 const $$ = (s) => document.querySelectorAll(s);
 
 const state = {
@@ -43,19 +64,6 @@ function showToast(message, type = "info") {
   }, 2800);
 }
 
-// ---- Theme Switcher ----
-(function initTheme() {
-  const saved = localStorage.getItem("mf-theme") || "dark";
-  document.documentElement.setAttribute("data-theme", saved);
-
-  $("#theme-toggle")?.addEventListener("click", () => {
-    const cur = document.documentElement.getAttribute("data-theme");
-    const next = cur === "dark" ? "light" : "dark";
-    document.documentElement.setAttribute("data-theme", next);
-    localStorage.setItem("mf-theme", next);
-  });
-})();
-
 function esc(s) {
   return (s || "").replace(/[&<>"']/g, c => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -71,15 +79,6 @@ async function loadProfiles() {
     const res = await fetch("/api/profiles");
     const d = await res.json();
     state.profiles = d.profiles || [];
-    // Đếm riêng số tài khoản CHẮC CHẮN đăng nhập được, để nhìn chip trên topbar
-    // là biết đội hình thực sự dùng được bao nhiêu.
-    const ok = state.profiles.filter(p => p.logged_in === true).length;
-    const total = state.profiles.length;
-    $("#pool-info").textContent = ok && ok < total
-      ? `${ok}/${total} tài khoản` : `${total} tài khoản`;
-    const tabEl = $("#total-tabs .stat-val") || $("#total-tabs");
-    if (tabEl) tabEl.textContent = `${total} tài khoản`;
-
     renderProfiles();
   } catch (err) {
     console.error("Lỗi load profiles:", err);
@@ -93,7 +92,7 @@ async function loadProfiles() {
 let profilesSig = "";
 
 function profileState(p) {
-  if (p.login_open) return { key: "logging", pill: "warn", text: "Đang mở Chrome…" };
+  if (p.login_open) return { key: "logging", pill: "warn", text: "Đang đăng nhập…" };
   if (p.logged_in === true) return { key: "on", pill: "online", text: "Đã đăng nhập" };
   if (p.logged_in === false) return { key: "off", pill: "danger", text: "Đăng nhập lỗi" };
   return { key: "unknown", pill: "", text: p.exists ? "Chưa kiểm tra" : "Chưa kết nối" };
@@ -123,18 +122,20 @@ function renderProfiles(force) {
           <span class="status-dot ${st.key === "logging" ? "active-logging" : (st.key === "on" ? "online" : "")}"></span>
           <span class="pcard-name">${esc(p.name)}</span>
           <span class="pcard-status-pill ${st.pill}">${st.text}</span>
-          <button class="icon-action" data-checkp="${esc(p.name)}" title="Mở Chrome kiểm tra xem tài khoản này còn đăng nhập không">
+        </div>
+        <div class="pcard-email" title="${esc(p.email || "")}">${esc(p.email || "—")}</div>
+        ${err ? `<div class="pcard-err" title="${esc(err)}">${esc(err)}</div>` : ""}
+        <div class="pcard-actions">
+          <button class="icon-action" data-checkp="${esc(p.name)}" title="Kiểm tra đăng nhập">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-3-6.7"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+          </button>
+          <button class="btn ${st.key === "logging" ? "primary confirm" : (st.key === "on" ? "action-btn" : "primary")} sm btn-login-step" data-login="${esc(p.name)}" data-stage="${st.key === "logging" ? "confirm" : "idle"}">
+            ${st.key === "logging" ? "Đã xong" : (st.key === "on" ? "Đăng nhập lại" : "Đăng nhập")}
           </button>
           <button class="icon-action danger" data-delp="${esc(p.name)}" title="Xoá tài khoản">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path></svg>
           </button>
         </div>
-        <div class="pcard-email" title="${esc(p.email || "")}">${esc(p.email || "—")}</div>
-        ${err ? `<div class="pcard-err" title="${esc(err)}">${esc(err)}</div>` : ""}
-        <button class="btn ${st.key === "logging" ? "primary confirm" : (st.key === "on" ? "action-btn" : "primary")} sm btn-login-step" data-login="${esc(p.name)}" data-stage="${st.key === "logging" ? "confirm" : "idle"}">
-          ${st.key === "logging" ? "Đã xong" : (st.key === "on" ? "Đăng nhập lại" : "Đăng nhập")}
-        </button>
       </div>
     `;
   }).join("");
@@ -167,7 +168,7 @@ function renderProfiles(force) {
 Toàn bộ dữ liệu đăng nhập (thư mục profile) cũng bị xoá.`)) return;
       const r = await (await fetch(`/api/profiles/${name}`, { method: "DELETE" })).json();
       if (r.dir_removed === false) {
-        showToast(`Đã xoá ${name} nhưng chưa xoá được thư mục (Chrome còn mở?)`, "error");
+        showToast(`Đã xoá ${name}, nhưng còn dữ liệu đăng nhập chưa dọn được.`, "error");
       } else {
         showToast(`Đã xoá ${name} và thư mục profile`, "info");
       }
@@ -210,7 +211,7 @@ const BULK_LABEL = {
 // Chạy song song nhiều cửa sổ -> phải nói rõ CỬA SỔ NÀO đang ở bước nào,
 // không thì người dùng nhìn 10 dòng "Đang đăng nhập…" chẳng biết vào cái nào.
 const BULK_PHASE = {
-  starting: "Đang mở Chrome…", email: "Đang nhập email…",
+  starting: "Đang bắt đầu…", email: "Đang nhập email…",
   password: "Đang nhập mật khẩu…", "2fa": "Đang nhập mã 2FA…",
   captcha: "Cần bạn xác minh", done: "Xong",
 };
@@ -257,6 +258,21 @@ function closeBulkModal() {
 }
 
 $("#open-bulk-login")?.addEventListener("click", openBulkModal);
+$("#open-manual-login")?.addEventListener("click", async (event) => {
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const response = await fetch("/api/profiles/manual-login", { method: "POST" });
+    const data = await response.json();
+    if (!response.ok || !data.opened) throw new Error(data.detail || "Không mở được trang đăng nhập");
+    await loadProfiles();
+    showToast(`Đăng nhập ${data.profile}, rồi bấm “Đã xong”.`, "info");
+  } catch (error) {
+    showToast(`Không mở được đăng nhập thủ công: ${error.message}`, "error");
+  } finally {
+    button.disabled = false;
+  }
+});
 
 // ---- Ngăn kéo Tài khoản ----------------------------------------------------
 // Tài khoản là thứ cài một lần rồi thôi. Để nó nằm giữa màn hình chính thì mỗi
@@ -268,6 +284,7 @@ function toggleAccountsDrawer(show) {
   const open = show === undefined ? d.hidden : show;
   d.hidden = !open;
   b.hidden = !open;
+  if (open) $("#btn-close-accounts")?.focus();
 }
 
 // Xoá hết tài khoản. Việc này xoá luôn thư mục phiên đăng nhập nên KHÔNG lùi lại
@@ -296,7 +313,7 @@ $("#btn-clear-profiles")?.addEventListener("click", async (ev) => {
     if (!res.ok) throw new Error(d.detail || "xoá thất bại");
     const kept = (d.dirs_kept || []).length;
     showToast(kept
-      ? `Đã xoá ${d.removed} tài khoản, còn ${kept} thư mục chưa xoá được (Chrome đang mở?)`
+      ? `Đã xoá ${d.removed} tài khoản; còn ${kept} tài khoản cần dọn dữ liệu đăng nhập`
       : `Đã xoá ${d.removed} tài khoản`, kept ? "error" : "success");
   } catch (e) {
     showToast(`Không xoá được: ${e.message}`, "error");
@@ -321,11 +338,13 @@ document.addEventListener("click", (e) => {
   if (item) item.closest("details.menu")?.removeAttribute("open");
 });
 
-document.addEventListener("keydown", (e) => {
+function handleOverlayEscape(e) {
   if (e.key !== "Escape") return;
   document.querySelectorAll("details.menu[open]").forEach((d) => (d.open = false));
   if (!$("#accounts-drawer")?.hidden) toggleAccountsDrawer(false);
-});
+}
+document.addEventListener("keydown", handleOverlayEscape);
+if (overlayHost !== document) overlayHost.addEventListener("keydown", handleOverlayEscape);
 
 // ---- Khuôn prompt dùng chung (data/prompt_template.txt) --------------------
 // Sửa được thẳng trên UI: trước đây phải mở file bằng tay rồi restart server.
@@ -348,7 +367,7 @@ async function loadPromptTemplate() {
     const ph = $("#tm-placeholder");
     if (ph) ph.textContent = tplPlaceholder;
   } catch (e) {
-    tplStatus("Không đọc được khuôn prompt.", true);
+    tplStatus("Không mở được phần này.", true);
   }
 }
 
@@ -385,7 +404,7 @@ $("#tm-save")?.addEventListener("click", async () => {
       const d = await res.json().catch(() => ({}));
       throw new Error(d.detail || "lưu thất bại");
     }
-    showToast("Đã lưu khuôn prompt", "success");
+    showToast("Đã lưu thay đổi", "success");
     closeTplModal();
   } catch (e) {
     tplStatus(String(e.message || e), true);
@@ -525,19 +544,19 @@ $("#lm-manual")?.addEventListener("click", async (ev) => {
       t.btn.dataset.stage = "confirm";
       t.btn.classList.add("confirm");
     }
-    showToast(`Đã mở Chrome. Đăng nhập xong bấm "Xong".`, "info");
+    showToast(`Đăng nhập xong bấm “Xong”.`, "info");
     loadProfiles();
   } catch (e) {
-    showToast(`Không thể mở Chrome: ${e.message}`, "error");
+    showToast(`Không mở được trang đăng nhập: ${e.message}`, "error");
   }
 });
 
 const LOGIN_PHASE_TEXT = {
-  starting: "Đang mở Chrome…",
+  starting: "Đang bắt đầu…",
   email: "Đang nhập email…",
   password: "Đang nhập mật khẩu…",
   "2fa": "Đang nhập mã 2FA…",
-  captcha: "⚠️ ChatGPT đòi xác minh người thật — bấm giúp trong cửa sổ Chrome, tool sẽ tự chạy tiếp.",
+  captcha: "ChatGPT cần xác minh. Hãy hoàn tất trong cửa sổ đăng nhập.",
   done: "Xong!",
 };
 
@@ -553,7 +572,7 @@ $("#lm-go")?.addEventListener("click", async () => {
   $("#lm-go").disabled = true;
   $("#lm-manual").disabled = true;
   st.hidden = false;
-  st.textContent = "Đang mở Chrome…";
+  st.textContent = "Đang bắt đầu…";
 
   try {
     const res = await fetch(`/api/profiles/${t.name}/login`, {
@@ -588,7 +607,7 @@ $("#lm-go")?.addEventListener("click", async () => {
         clearInterval(state.loginPoll);
         state.loginPoll = null;
         st.textContent = (d.error || "Đăng nhập tự động không xong.")
-          + " Cửa sổ Chrome vẫn mở — bạn đăng nhập nốt rồi bấm nút bên dưới.";
+          + " Hãy đăng nhập tiếp trong cửa sổ đang mở rồi bấm nút bên dưới.";
         $("#lm-go").disabled = true;
         const mb = $("#lm-manual");
         mb.disabled = false;
@@ -752,8 +771,8 @@ function renderTemplates() {
         <span class="group-name" title="${esc(g.name)}">${esc(g.name)}</span>
         <span class="group-count picked-count">${g.count} ảnh</span>
         <button type="button" class="group-del" data-delgroup="${esc(g.name)}"
-                title="Xoá bộ này">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>
+                title="Xoá bộ ảnh mẫu ${esc(g.name)}" aria-label="Xoá bộ ảnh mẫu ${esc(g.name)}">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4h8v2M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg>
         </button>
       </div>
 
@@ -990,12 +1009,12 @@ async function loadPrompts() {
 $("#clear-prompts")?.addEventListener("click", async () => {
   const n = state.prompts.length;
   if (!n) return;
-  if (!confirm(`Xoá toàn bộ ${n} prompt?`)) return;
+  if (!confirm(`Xoá toàn bộ ${n} yêu cầu?`)) return;
   try {
     const r = await (await fetch("/api/prompts", { method: "DELETE" })).json();
     state.promptId = null;
     state.selectedPrompts?.clear?.();
-    showToast(`Đã xoá ${r.deleted} prompt`, "info");
+    showToast(`Đã xoá ${r.deleted} yêu cầu`, "info");
     loadPrompts();
   } catch (e) {
     showToast(`Lỗi: ${e.message}`, "error");
@@ -1024,7 +1043,7 @@ $("#csv-input")?.addEventListener("change", async (e) => {
     if (!res.ok) {
       showToast(d.detail || "Không nhập được CSV", "error");
     } else {
-      showToast(`Đã nhập ${d.added} prompt` +
+      showToast(`Đã nhập ${d.added} yêu cầu` +
                 (d.skipped ? `, bỏ qua ${d.skipped} dòng trống` : ""), "success");
       loadPrompts();
     }
@@ -1072,7 +1091,7 @@ function renderPrompts() {
   if (!list) return;
 
   if (state.prompts.length === 0) {
-    list.innerHTML = `<div class="empty-state" style="padding:14px; margin:0;">Chưa có Prompt. Bấm "Tạo Prompt" để thêm.</div>`;
+    list.innerHTML = `<div class="empty-state" style="padding:14px; margin:0;">Chưa có yêu cầu. Bấm “Thêm yêu cầu” để bắt đầu.</div>`;
     updateRunMatrix();
     return;
   }
@@ -1147,7 +1166,7 @@ function renderPrompts() {
       if (!confirm("Xoá Prompt này?")) return;
       await fetch(`/api/prompts/${id}`, { method: "DELETE" });
       state.selectedPrompts.delete(id);
-      showToast("Đã xoá Prompt", "info");
+      showToast("Đã xoá yêu cầu", "info");
       loadPrompts();
     });
   });
@@ -1174,7 +1193,7 @@ $("#pf-close-btn")?.addEventListener("click", () => { promptForm.hidden = true; 
 function openPromptForm(id) {
   const p = id ? state.prompts.find(x => x.id === id) : null;
   $("#pf-id").value = p ? p.id : "";
-  $("#pf-title").textContent = p ? "Sửa Prompt" : "Tạo Prompt Mới";
+  $("#pf-title").textContent = p ? "Sửa yêu cầu" : "Thêm yêu cầu";
   $("#pf-name").value = p ? p.name : "";
   $("#pf-text").value = p ? p.text : "";
 
@@ -1205,10 +1224,10 @@ promptForm?.addEventListener("submit", async (e) => {
     const saved = await res.json();
     promptForm.hidden = true;
     state.promptId = saved.id;
-    showToast("Đã lưu Prompt", "success");
+    showToast("Đã lưu yêu cầu", "success");
     loadPrompts();
   } catch (err) {
-    showToast("Lỗi khi lưu Prompt", "error");
+    showToast("Không lưu được yêu cầu", "error");
   }
 });
 
@@ -1244,7 +1263,7 @@ function updateRunMatrix() {
     if (runBtn) {
       runBtn.disabled = true;
     }
-    if (runBtnText) runBtnText.textContent = "Đang gen...";
+    if (runBtnText) runBtnText.textContent = "Đang tạo...";
     // Không viết câu hướng dẫn nào ở đây: nút "Dừng khẩn cấp" đứng ngay cạnh,
     // tự nó đã nói đủ. Để trống cho thanh co lại vừa đúng nội dung.
     if (mainMsg) mainMsg.textContent = "";
@@ -1257,13 +1276,13 @@ function updateRunMatrix() {
       statusState.textContent = "Sẵn sàng";
     }
     if (runBtn) runBtn.disabled = true;
-    if (runBtnText) runBtnText.textContent = "Tạo Mockup";
+    if (runBtnText) runBtnText.textContent = "Tạo ảnh";
     if (!state.selectedGroup) {
       if (mainMsg) mainMsg.textContent = `Chọn 1 bộ mockup`;
     } else if (tplCount === 0) {
       if (mainMsg) mainMsg.textContent = `Bộ này chưa tích ảnh nào`;
     } else {
-      if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 prompt`;
+      if (mainMsg) mainMsg.textContent = `Chọn ít nhất 1 yêu cầu`;
     }
   } else {
     if (statusPill && statusState) {
@@ -1272,16 +1291,16 @@ function updateRunMatrix() {
     }
     if (runBtn) runBtn.disabled = false;
     const activePrompt = state.prompts.find(p => state.selectedPrompts.has(p.id));
-    const pName = activePrompt ? activePrompt.name : "Prompt";
+    const pName = activePrompt ? activePrompt.name : "Yêu cầu";
     const gName = state.selectedGroup || "";
     if (promptCount === 1) {
-      if (runBtnText) runBtnText.textContent = `Tạo Mockup (${tplCount})`;
+      if (runBtnText) runBtnText.textContent = `Tạo ${tplCount} ảnh`;
       if (mainMsg) mainMsg.innerHTML =
         `<b>${esc(gName)}</b> · ${tplCount} ảnh · <b>${esc(pName)}</b>`;
     } else {
       if (runBtnText) runBtnText.textContent = `Tạo ${promptCount} bộ`;
       if (mainMsg) mainMsg.innerHTML =
-        `<b>${esc(gName)}</b> · ${tplCount} ảnh · <b>${promptCount}</b> prompt`;
+        `<b>${esc(gName)}</b> · ${tplCount} ảnh · <b>${promptCount}</b> yêu cầu`;
     }
   }
 }
@@ -1343,7 +1362,7 @@ async function startGenerate() {
     const skipMsg = d.skipped_jobs
       ? ` (bỏ qua ${d.skipped_jobs} ảnh đã có${d.skipped_collections ? `, ${d.skipped_collections} bộ trọn vẹn` : ""})`
       : "";
-    showToast(`Bắt đầu ${d.started_collections} bộ trên ${d.profiles.length} tài khoản${skipMsg}`, "success");
+    showToast(`Đã xếp ${d.started_collections} bộ chờ tạo${skipMsg}`, "success");
     showResultsPanel();
     startPolling();
   } catch (err) {
@@ -1429,7 +1448,7 @@ function updateBatchMonitor(isRunning) {
   } else if (remaining === 0) {
     msg = "Xong tất cả";
   } else if (state.exhaustedProfiles && state.exhaustedProfiles.length) {
-    msg = `Hết lượt tài khoản · ${remaining} bộ chưa xong`;
+    msg = `Tạm hết lượt tạo ảnh · ${remaining} bộ chưa xong`;
   } else {
     msg = `Tạm dừng · ${remaining} bộ chưa xong`;
   }
@@ -1448,6 +1467,7 @@ async function triggerEmergencyStop() {
   try {
     const res = await fetch("/api/jobs/stop", { method: "POST" });
     const d = await res.json();
+    if (!res.ok || !d.ok) throw new Error(d.detail || "Không dừng được");
     state.isStopped = true;
     showToast(`🛑 Đã dừng khẩn cấp! (Dừng tại: ${d.stopped_at || "tiến trình"})`, "warn");
 
@@ -1463,8 +1483,8 @@ async function triggerEmergencyStop() {
 
     const resJobs = await fetch("/api/jobs");
     const dj = await resJobs.json();
-    state.jobs = dj.jobs || [];
-    state.collections = dj.collections || [];
+    state.jobs = (dj.collections || []).length ? [] : (dj.jobs || []);
+    state.collections = (dj.collections || []).filter(c => !c.free);
     if (state.collections.length > 0) renderCollections(state.collections);
     else renderResults(state.jobs);
 
@@ -1487,8 +1507,8 @@ function startPolling() {
     try {
       const res = await fetch("/api/jobs");
       const d = await res.json();
-      state.jobs = d.jobs || [];
-      state.collections = d.collections || [];
+      state.jobs = (d.collections || []).length ? [] : (d.jobs || []);
+      state.collections = (d.collections || []).filter(c => !c.free);
       state.fleet = d.fleet || {};
       state.runProfile = d.profile || null;
       state.exhaustedProfiles = d.exhausted || [];
@@ -1594,6 +1614,23 @@ function renderFleetBar(fleet, exhausted) {
 // Ảnh nào đã từng hiện rồi thì thôi, chỉ tấm VỪA xong mới chạy hiệu ứng hiện ra.
 const _shownDone = new Set();
 
+// Backend lưu đường dẫn file thô. Mã hoá từng thành phần để tên bộ có #, %, dấu
+// nháy hoặc dấu cách không làm trình duyệt cắt URL khi xem/tải ảnh.
+function outputImageUrl(raw) {
+  const prefix = "/files/outputs/";
+  const value = String(raw || "");
+  if (!value.startsWith(prefix)) return value;
+  return prefix + value.slice(prefix.length).split("/")
+    .map(part => encodeURIComponent(part).replace(/'/g, "%27")).join("/");
+}
+
+function friendlyError(value) {
+  const message = String(value || "").toLowerCase();
+  if (message.includes("đăng nhập") || message.includes("login")) return "Cần đăng nhập lại.";
+  if (message.includes("hết lượt") || message.includes("quota")) return "Tạm hết lượt tạo ảnh. Hãy thử lại sau.";
+  return "Không tạo được ảnh. Hãy thử lại.";
+}
+
 function jobCardHTML(j) {
   // Job cũ lưu từ phiên trước có thể còn kèm thư mục cha -> cắt ở đây cho chắc
   const fileName = String(j.template_name || "").split("/").pop();
@@ -1603,22 +1640,24 @@ function jobCardHTML(j) {
   const isRunning = j.status === "running";
   const isFailed = j.status === "failed";
   const cls = isDone ? "done" : (isRunning ? "running" : (isFailed ? "failed" : "pending"));
+  const imageUrl = isDone ? outputImageUrl(j.result_url) : "";
 
   const body = isDone
-    ? `<img class="job-mockup-img" src="${j.result_url}" alt="${esc(fileName)}"
-            loading="lazy"
-            onclick="window.openLightbox('${j.result_url}', '${esc(fileName)}')">`
+    ? `<button type="button" class="job-preview-button" data-preview-url="${esc(imageUrl)}"
+            data-preview-caption="${esc(fileName)}" aria-label="Xem ảnh ${esc(fileName)}">
+         <img class="job-mockup-img" src="${esc(imageUrl)}" alt="${esc(fileName)}" loading="lazy">
+       </button>`
     : `<div class="job-slot-empty">
          ${isRunning ? `<span class="spin-ring"></span>`
-           : (isFailed ? `<span class="job-err" title="${esc(j.error || "")}">✕</span>` : "")}
+           : (isFailed ? `<span class="job-err" title="${esc(friendlyError(j.error))}">✕</span>` : "")}
        </div>`;
 
   return `
-    <div class="job-card ${cls}${justDone ? " just-done" : ""}" ${isFailed && j.error ? `title="${esc(j.error)}"` : ""}>
+    <div class="job-card ${cls}${justDone ? " just-done" : ""}" ${isFailed && j.error ? `title="${esc(friendlyError(j.error))}"` : ""}>
       <div class="job-preview-wrap">
         ${body}
         ${isDone ? `
-          <a href="${j.result_url}" download class="job-dl" title="Tải ảnh này">
+          <a href="${esc(imageUrl)}" download class="job-dl" title="Tải ảnh này">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
           </a>` : ""}
       </div>
@@ -1643,6 +1682,11 @@ function renderCollections(cols) {
     totalJobs += c.total_count || 0;
     doneJobs += c.done_count || 0;
   });
+  const downloadAll = $("#btn-download-all");
+  if (downloadAll) {
+    downloadAll.setAttribute("aria-disabled", doneJobs ? "false" : "true");
+    downloadAll.tabIndex = doneJobs ? 0 : -1;
+  }
 
   if (stat) {
     stat.textContent = `${doneJobs}/${totalJobs} ảnh · ${cols.length} bộ`;
@@ -1655,7 +1699,7 @@ function renderCollections(cols) {
   if (!container) return;
 
   // Chữ ký gồm mọi thứ nhìn thấy được: đổi một job mới vẽ lại, còn không thì thôi.
-  if (!changed("cols", cols.map(c => [c.id, c.name, c.status, c.done_count,
+  if (!changed("cols", cols.map(c => [c.id, c.name, c.status, c.queue_position, c.done_count,
         c.total_count, (c.jobs || []).map(j => [j.id, j.status, j.result_url])]))) {
     return;
   }
@@ -1665,7 +1709,8 @@ function renderCollections(cols) {
     const isRunning = c.status === "running";
     const isPartial = c.status === "partial";
     const statusBadgeClass = isDone ? "done" : (isRunning ? "running" : (isPartial ? "partial" : ""));
-    const statusText = isDone ? "Hoàn thành" : (isRunning ? "Đang chạy" : (isPartial ? "Hoàn thành một phần" : "Chờ"));
+    const statusText = isDone ? "Hoàn thành" : (isRunning ? "Đang chạy" :
+      (isPartial ? "Hoàn thành một phần" : (c.queue_position ? `Chờ lượt ${c.queue_position}` : "Chờ")));
 
     return `
       <div class="collection-card ${statusBadgeClass}">
@@ -1677,9 +1722,12 @@ function renderCollections(cols) {
             <span class="collection-stat-badge ${statusBadgeClass}">
               ${c.done_count}/${c.total_count} · ${statusText}
             </span>
-            <a href="/api/jobs/zip?cid=${c.id}" class="icon-action" title="Tải trọn bộ &quot;${esc(c.name)}&quot; (.zip)">
+            <a href="/api/jobs/zip?cid=${encodeURIComponent(c.id)}" class="icon-action" ${c.done_count ? "" : 'aria-disabled="true" tabindex="-1"'} title="Tải trọn bộ &quot;${esc(c.name)}&quot; (.zip)" aria-label="Tải bộ ${esc(c.name)}">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
             </a>
+            <button type="button" class="btn action-btn sm collection-delete" data-delete-collection="${esc(c.id)}" data-collection-name="${esc(c.name)}" ${isRunning || c.status === "pending" ? "disabled" : ""} title="Xoá bộ này" aria-label="Xoá bộ ${esc(c.name)}">
+              Xoá bộ
+            </button>
           </div>
         </div>
 
@@ -1691,6 +1739,29 @@ function renderCollections(cols) {
   }).join("");
 
 }
+
+$("#collections-container")?.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-delete-collection]");
+  if (!button || button.disabled) return;
+  const name = button.dataset.collectionName;
+  if (!confirm(`Xoá bộ “${name}” và các ảnh của bộ này?\nKhông thể hoàn tác.`)) return;
+  button.disabled = true;
+  try {
+    const response = await fetch(`/api/collections/${encodeURIComponent(button.dataset.deleteCollection)}`, {method: "DELETE"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Không xoá được bộ này");
+    showToast(`Đã xoá bộ “${name}”`, "success");
+    const fresh = await (await fetch("/api/jobs")).json();
+    state.collections = (fresh.collections || []).filter(c => !c.free);
+    state.jobs = (fresh.collections || []).length ? [] : (fresh.jobs || []);
+    _sig.cols = null;
+    renderCollections(state.collections);
+    if (!state.collections.length) $("#results-panel").hidden = true;
+  } catch (error) {
+    showToast(error.message, "error");
+    button.disabled = false;
+  }
+});
 
 // Băng cảnh báo: hết lượt tạo ảnh (chặn) + cảnh báo nhẹ (vd: mức suy nghĩ)
 function renderNotices(quota, warnings) {
@@ -1706,30 +1777,31 @@ function renderNotices(quota, warnings) {
   }
 
   state.quotaSeen = state.quotaSeen || new Set();
+  let newQuota = false;
   quota.forEach(x => {
     if (!state.quotaSeen.has(x.profile)) {
       state.quotaSeen.add(x.profile);
-      showToast(`Tài khoản "${x.profile}" đã hết lượt tạo ảnh`, "error");
+      newQuota = true;
     }
   });
+  if (newQuota) showToast("Tạm hết lượt tạo ảnh. Việc còn lại sẽ thử tiếp nếu có thể.", "error");
   state.warnSeen = state.warnSeen || new Set();
+  let newWarning = false;
   warnings.forEach(w => {
     if (!state.warnSeen.has(w)) {
       state.warnSeen.add(w);
-      showToast(w, "error");
+      newWarning = true;
     }
   });
+  if (newWarning) showToast("Có vấn đề khi tạo ảnh. Hãy xem bộ bị lỗi.", "error");
 
   const parts = [];
   if (quota.length) {
     parts.push(`
-      <b>Hết lượt tạo ảnh:</b> ${quota.map(x => esc(x.profile)).join(", ")}.
-      Các job còn lại đã chuyển sang tài khoản khác — thêm tài khoản hoặc chờ ChatGPT reset.
-      <div class="quota-reason">${esc(quota[0].reason || "")}</div>`);
+      <b>Tạm hết lượt tạo ảnh.</b> Việc còn lại sẽ được thử tiếp nếu có thể. Bạn có thể thử lại sau.`);
   }
   if (warnings.length) {
-    parts.push(`<b>Lưu ý:</b>
-      <div class="quota-reason">${warnings.map(esc).join("<br>")}</div>`);
+    parts.push(`<b>Có vấn đề khi tạo ảnh.</b> Hãy xem bộ bị lỗi.`);
   }
   box.hidden = false;
   box.innerHTML = parts.join('<hr class="notice-sep">');
@@ -1750,6 +1822,11 @@ function renderResults(jobs) {
 
   const doneCount = jobs.filter(j => j.status === "done").length;
   const total = jobs.length;
+  const downloadAll = $("#btn-download-all");
+  if (downloadAll) {
+    downloadAll.setAttribute("aria-disabled", doneCount ? "false" : "true");
+    downloadAll.tabIndex = doneCount ? 0 : -1;
+  }
 
   if (stat) {
     stat.textContent = `${doneCount}/${total} ảnh`
@@ -1766,24 +1843,23 @@ function renderResults(jobs) {
   grid.innerHTML = jobs.map(jobCardHTML).join("");
 }
 
-// Xoá kết quả = xoá luôn ẢNH trong designs/. Không xoá file thì lần gen sau
-// skip_done vẫn thấy thư mục có ảnh và bỏ qua, tức là bấm xong vẫn không gen lại
-// được. Vì đụng tới file trên đĩa nên phải hỏi trước.
+// Chỉ xoá các bộ mockup đang hiện ở trang này; CSV có thao tác riêng.
 $("#btn-clear-jobs")?.addEventListener("click", async () => {
   const n = (state.collections || []).reduce((s, c) => s + (c.done_count || 0), 0);
-  if (!confirm(`Xoá kết quả?
+  if (!confirm(`Xoá tất cả bộ ở mục Tạo từ ảnh mẫu?
 
 `
-             + `${n} ảnh đã gen trong thư mục designs/ cũng bị xoá vĩnh viễn.`)) return;
+             + `${n} ảnh đã tạo của các bộ này sẽ bị xoá vĩnh viễn. Ảnh từ bảng không bị ảnh hưởng.`)) return;
 
   try {
-    const res = await fetch("/api/jobs", { method: "DELETE" });
+    const res = await fetch("/api/collections", { method: "DELETE" });
     const d = await res.json();
+    if (!res.ok) throw new Error(d.detail || "Không xoá được kết quả");
     showToast(d.deleted_files
-      ? `Đã xoá ${d.deleted_files} ảnh và ${d.deleted_folders} thư mục`
+      ? `Đã xoá ${d.deleted_collections} bộ và ${d.deleted_files} ảnh`
       : "Đã xoá danh sách kết quả", "info");
   } catch (e) {
-    showToast("Không xoá được kết quả", "error");
+    showToast(e.message || "Không xoá được kết quả", "error");
     return;
   }
 
@@ -1805,39 +1881,63 @@ $("#btn-clear-jobs")?.addEventListener("click", async () => {
 // 5. Lightbox Modal
 // ==========================================================================
 
-window.openLightbox = function(url, caption = "") {
-  const lightbox = document.getElementById("lightbox-modal");
-  const lightboxImg = document.getElementById("lightbox-img");
-  const lightboxCap = document.getElementById("lightbox-caption");
-  const lightboxDl = document.getElementById("lightbox-download");
-  
-  if (!lightbox || !lightboxImg) return;
-  lightboxImg.src = url;
-  if (lightboxCap) lightboxCap.textContent = caption;
-  if (lightboxDl) {
-    lightboxDl.href = url;
-    lightboxDl.download = caption || "mockup.png";
+const mockupLightbox = document.getElementById("lightbox-modal");
+const mockupLightboxImg = mockupLightbox?.querySelector("#lightbox-img");
+const mockupLightboxCap = mockupLightbox?.querySelector("#lightbox-caption");
+const mockupLightboxDl = mockupLightbox?.querySelector("#lightbox-download");
+const mockupLightboxError = mockupLightbox?.querySelector("#lightbox-error");
+let previewReturnFocus = null;
+
+// Workspace đặt Mockup trong iframe cao theo nội dung. Đưa viewer lên document
+// cha để nó luôn nằm giữa cửa sổ thực và không bị iframe cắt mất.
+try {
+  if (window.parent !== window && window.parent.location.origin === location.origin) {
+    window.parent.document.body.appendChild(mockupLightbox);
   }
-  lightbox.removeAttribute("hidden");
-  lightbox.style.display = "flex";
+} catch (_) {
+  // Trang Mockup mở độc lập vẫn dùng viewer trong document hiện tại.
+}
+
+window.openLightbox = function(url, caption = "") {
+  if (!mockupLightbox || !mockupLightboxImg) return;
+  const imageUrl = String(url || "");
+  previewReturnFocus = document.activeElement;
+  if (mockupLightboxError) mockupLightboxError.hidden = true;
+  mockupLightboxImg.hidden = false;
+  mockupLightboxImg.src = imageUrl;
+  if (mockupLightboxCap) mockupLightboxCap.textContent = caption;
+  if (mockupLightboxDl) {
+    mockupLightboxDl.href = imageUrl;
+    mockupLightboxDl.download = caption || "mockup.png";
+  }
+  mockupLightbox.hidden = false;
+  mockupLightbox.querySelector("#lightbox-close")?.focus();
 };
 
 window.closeLightbox = function() {
-  const lightbox = document.getElementById("lightbox-modal");
-  if (lightbox) {
-    lightbox.setAttribute("hidden", "");
-    lightbox.style.display = "none";
-  }
+  if (!mockupLightbox) return;
+  mockupLightbox.hidden = true;
+  if (mockupLightboxImg) mockupLightboxImg.removeAttribute("src");
+  previewReturnFocus?.focus?.();
 };
 
-document.getElementById("lightbox-close")?.addEventListener("click", window.closeLightbox);
-document.querySelector("#lightbox-modal .lightbox-backdrop")?.addEventListener("click", window.closeLightbox);
-
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    window.closeLightbox();
-  }
+mockupLightboxImg?.addEventListener("error", () => {
+  mockupLightboxImg.hidden = true;
+  if (mockupLightboxError) mockupLightboxError.hidden = false;
 });
+mockupLightbox?.querySelector("#lightbox-close")?.addEventListener("click", window.closeLightbox);
+mockupLightbox?.querySelector(".lightbox-backdrop")?.addEventListener("click", window.closeLightbox);
+document.addEventListener("click", (event) => {
+  const trigger = event.target.closest("[data-preview-url]");
+  if (trigger) window.openLightbox(trigger.dataset.previewUrl, trigger.dataset.previewCaption || "");
+});
+for (const keyWindow of [window, window.parent]) {
+  try {
+    keyWindow.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && mockupLightbox && !mockupLightbox.hidden) window.closeLightbox();
+    });
+  } catch (_) { /* parent khác origin */ }
+}
 
 // Init
 async function init() {
@@ -1845,8 +1945,8 @@ async function init() {
   try {
     const res = await fetch("/api/jobs");
     const d = await res.json();
-    state.jobs = d.jobs || [];
-    state.collections = d.collections || [];
+    state.jobs = (d.collections || []).length ? [] : (d.jobs || []);
+    state.collections = (d.collections || []).filter(c => !c.free);
     state.fleet = d.fleet || {};
 
     const hasCollections = state.collections && state.collections.length > 0;

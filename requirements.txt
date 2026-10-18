@@ -4,4 +4,5 @@ playwright
 pillow
 pyyaml
 python-multipart
+openpyxl
 pyotp

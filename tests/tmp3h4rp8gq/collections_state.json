@@ -1,0 +1,42 @@
+{
+  "saved_at": 1791949664.4990494,
+  "collections": [
+    {
+      "id": "old-col",
+      "name": "Previous",
+      "prompt_name": "PROMPT 1",
+      "free": true,
+      "free_sequence": true,
+      "status": "done",
+      "jobs": [
+        {
+          "id": "old-job",
+          "status": "done",
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\tests\\tmp3h4rp8gq\\Previous\\1.png",
+          "folder": "Previous",
+          "results": [
+            "/files/outputs/Previous/1.png"
+          ],
+          "result_url": "/files/outputs/Previous/1.png"
+        }
+      ]
+    },
+    {
+      "id": "new-col",
+      "name": "Next",
+      "prompt_name": "PROMPT 1",
+      "free": true,
+      "free_sequence": true,
+      "status": "pending",
+      "jobs": [
+        {
+          "id": "new-job",
+          "status": "pending",
+          "results": [],
+          "dest": "C:\\Users\\Admin\\Desktop\\chatgpt-automation\\tests\\tmp3h4rp8gq\\Next\\1.png",
+          "result_url": "/files/outputs/Next/1.png"
+        }
+      ]
+    }
+  ]
+}
