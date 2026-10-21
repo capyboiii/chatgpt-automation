@@ -1,0 +1,192 @@
+/* Studio UI: visual-only layer shared by the workspace and both creation modes. */
+:root {
+  --bg: #171b22;
+  --bg-subtle: #20262e;
+  --bg-panel: #252d36;
+  --bg-panel-solid: #252d36;
+  --bg-card: #2b3540;
+  --bg-card-hover: #35424f;
+  --border: #3a4652;
+  --border-strong: #546170;
+  --border-accent: #ad8261;
+  --border-cyan: #8fa7af;
+  --text: #f6f2eb;
+  --text-dim: #e0d8ce;
+  --muted: #b9b2aa;
+  --accent: #e5ac75;
+  --accent-cyan: #adc3c5;
+  --accent-purple: #c7a5d3;
+  --accent-gradient: linear-gradient(135deg, #e5ac75, #cf9065);
+  --accent-gradient-hover: linear-gradient(135deg, #edba8b, #dc9c70);
+  --accent-soft: rgba(229, 172, 117, .16);
+  --ok: #9fd1aa;
+  --warn: #e5b56c;
+  --err: #f0958f;
+  --err-soft: rgba(240, 149, 143, .15);
+  --studio-shadow: 0 12px 34px rgba(2, 10, 21, .12);
+  --studio-line: #3a4652;
+}
+[data-theme="light"] {
+  --bg: #f4f0e8;
+  --bg-subtle: #ebe5da;
+  --bg-panel: #fffdf9;
+  --bg-panel-solid: #fffdf9;
+  --bg-card: #f8f4ed;
+  --bg-card-hover: #eee6da;
+  --border: #dfd6ca;
+  --border-strong: #c5b8a8;
+  --border-accent: #b47650;
+  --border-cyan: #708c92;
+  --text: #282722;
+  --text-dim: #4c4942;
+  --muted: #645f57;
+  --accent: #8e4f31;
+  --accent-cyan: #315e68;
+  --accent-purple: #765d7b;
+  --accent-gradient: linear-gradient(135deg, #9c5b3a, #7a432d);
+  --accent-gradient-hover: linear-gradient(135deg, #ab6946, #8e4f31);
+  --accent-soft: #f1dfd0;
+  --ok: #39775b;
+  --warn: #95601a;
+  --err: #b4443b;
+  --err-soft: #f9e5e1;
+  --studio-shadow: 0 12px 34px rgba(65, 48, 30, .055);
+  --studio-line: #e2d9ce;
+}
+html { color-scheme: dark; }
+html[data-theme="light"] { color-scheme: light; }
+body { color: var(--text); }
+::selection { background: var(--accent-soft); color: var(--text); }
+* { scrollbar-color: var(--border-strong) transparent; scrollbar-width: thin; }
+
+/* A single, quiet frame. The controls stay in their existing DOM positions. */
+.topbar { border-bottom: 1px solid var(--studio-line); box-shadow: none; }
+.topbar-inner { min-height: 64px; }
+.brand-logo { box-shadow: none; }
+.brand-name { letter-spacing: -.025em; }
+.workspace { max-width: 1480px; padding-top: 18px; }
+.app-container { max-width: 1440px; gap: 16px; }
+.ambient-glow { display: none; }
+
+.mode-tabs {
+  width: max-content;
+  min-width: min(100%, 450px);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 14px;
+  padding: 4px;
+  border-radius: 13px;
+  background: var(--bg-subtle);
+}
+.mode-tab { min-height: 39px; padding: 8px 16px; border-radius: 9px; }
+.mode-tab[aria-selected="true"] { background: var(--bg-panel); border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(3, 14, 27, .12); }
+.workspace-status { width: fit-content; max-width: 100%; margin-bottom: 16px; padding: 7px 12px; border-radius: 9px; background: var(--bg-subtle); }
+.workspace-alert { border-radius: 10px; }
+
+.panel { border: 1px solid var(--studio-line); border-radius: 16px; box-shadow: var(--studio-shadow); }
+.mode-intro { padding: 16px 20px; box-shadow: none; }
+.mode-kicker, .csvs-kicker { display: none; }
+.mode-title { margin: 0; font-size: clamp(1.28rem, 2vw, 1.62rem); letter-spacing: -.025em; }
+.mode-description { margin: 4px 0 0; color: var(--muted); }
+.panel-head { gap: 12px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
+.panel-title-group { gap: 10px; min-width: 0; }
+.panel-title-group h2, .workflow-run-heading h2 { letter-spacing: -.015em; }
+.step-number { width: 25px; height: 25px; border: 1px solid var(--border-accent); border-radius: 8px; }
+.stat-pill-badge { border-radius: 7px; }
+.panel-head-actions, .results-actions { flex-wrap: wrap; justify-content: flex-end; }
+
+.btn, .menu-trigger, .icon-btn, .icon-action {
+  border-radius: 9px;
+  box-shadow: none;
+  font-weight: 700;
+}
+.btn { min-height: 38px; }
+.btn.sm { min-height: 34px; }
+.btn.primary { background: var(--accent); color: #171b22; border-color: var(--accent); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); }
+[data-theme="light"] .btn.primary { color: #fff; }
+.btn:disabled, .icon-btn:disabled { filter: saturate(.65); }
+:where(button, a, input, textarea, select, summary):focus-visible { outline: 3px solid var(--accent-cyan); outline-offset: 2px; }
+.menu-pop { border-radius: 11px; box-shadow: 0 14px 32px rgba(2, 10, 21, .22); }
+
+/* Setup: clear work areas with compact, predictable spacing. */
+.main-columns { gap: 16px; }
+@media (min-width: 1120px) {
+  .main-columns { grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr); align-items: start; }
+  .panel-templates, .panel-prompts { min-width: 0; }
+  .prompt-list { grid-template-columns: 1fr; }
+}
+.panel-templates, .panel-prompts, .workflow-run-panel, .panel-results { padding: 18px 20px; }
+.dropzone-modern { min-height: 96px; border-radius: 11px; }
+.dropzone-icon-ring { width: 38px; height: 38px; }
+.gallery-toolbar { gap: 10px; }
+.group-list, .prompt-list { gap: 9px; }
+.prompt-list { max-height: 440px; }
+.prompt-card, .group-card, .collection-card { border-radius: 12px; }
+.prompt-card:hover, .group-card:hover { border-color: var(--border-strong); }
+.workflow-run-panel { border-left: 1px solid var(--studio-line); gap: 10px; }
+.workflow-run-panel .runbar { gap: 12px; }
+.workflow-run-panel .runbar-main-msg { color: var(--muted); }
+.workflow-run-panel #run-btn { min-width: 148px; }
+.run-strip { border-radius: 10px; background: var(--bg-subtle); }
+.collection-card { border-color: var(--studio-line); }
+.collection-header { gap: 10px; }
+.collection-folder-name { font-family: var(--f-body); font-size: .94rem; }
+.collection-actions { gap: 6px; }
+.results-grid { grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); }
+.job-card { border-radius: 10px; }
+.job-footer { padding: 7px 9px; }
+
+/* CSV setup: no colored rails or redundant nested-card look. */
+.csvs-control-panel { gap: 14px; }
+.csvs-control-panel > .workflow-block,
+.csvs-control-panel > .csvs-fields {
+  border: 1px solid var(--studio-line);
+  border-radius: 12px;
+  padding: 15px 16px;
+  background: var(--bg-subtle);
+}
+.csvs-control-panel > .workflow-block,
+.csvs-control-panel > .csvs-fields { border-left-width: 1px; border-left-color: var(--studio-line); }
+.csvs-toolbar { padding-top: 10px; }
+.csvs-field-list { max-width: 100%; grid-template-columns: repeat(auto-fit, minmax(min(100%, 310px), 1fr)); }
+.csvs-field { min-height: 44px; border-radius: 9px; }
+.csvs-field:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.csvs-size-row { padding-top: 6px; }
+.workflow-submit { margin-top: 5px; }
+#list .collection-card { padding: 15px; }
+.csvs-prompt-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 205px), 1fr)); }
+.csvs-prompt { border-radius: 10px; }
+.csvs-prompt .csvs-result img { height: 170px; }
+
+/* Dialogs and image previews share the same finish in both routes. */
+.side-drawer { border-radius: 16px; box-shadow: 0 28px 72px rgba(0, 8, 19, .38); }
+.side-drawer-head { border-bottom: 1px solid var(--border); }
+.side-drawer .pcard { border-radius: 10px; }
+.lightbox-content { border-radius: 13px; overflow: hidden; }
+.lightbox-img-wrap { min-height: 0; }
+.lightbox-img-wrap img { object-fit: contain; }
+
+@media (max-width: 760px) {
+  .workspace { padding: 12px 10px 30px; }
+  .mode-tabs { width: 100%; }
+  .app-container { gap: 12px; }
+  .panel-templates, .panel-prompts, .workflow-run-panel, .panel-results { padding: 14px; }
+  .panel-head { align-items: flex-start; }
+  .panel-title-group, .panel-head-actions { width: auto; }
+  .panel-head-actions { margin-left: auto; }
+  .csvs-control-panel > .workflow-block, .csvs-control-panel > .csvs-fields { padding: 12px; }
+  .csvs-field-list { grid-template-columns: 1fr; }
+}
+@media (max-width: 520px) {
+  .topbar-inner { min-height: 56px; }
+  .mode-tab { padding: 8px 6px; }
+  .workspace-status { width: 100%; }
+  .panel-head { flex-wrap: wrap; }
+  .panel-title-group, .panel-head-actions, .results-actions { width: 100%; }
+  .panel-head-actions, .results-actions { justify-content: flex-start; }
+  .workflow-run-panel #run-btn { min-width: 0; }
+  .csvs-prompt-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .btn, .mode-tab, .prompt-card, .group-card { transition: none; }
+}

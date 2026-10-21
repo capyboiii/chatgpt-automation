@@ -2,8 +2,8 @@
 (() => {
   const key = "mf-theme";
   const read = () => {
-    try { return localStorage.getItem(key) === "light" ? "light" : "dark"; }
-    catch { return "dark"; }
+    try { return localStorage.getItem(key) === "dark" ? "dark" : "light"; }
+    catch { return "light"; }
   };
   const apply = (theme) => {
     const value = theme === "light" ? "light" : "dark";
