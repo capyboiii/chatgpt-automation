@@ -23,7 +23,7 @@ class UiLayoutTests(unittest.TestCase):
             "index.html": ("main-runbar", "run-btn", "btn-clear-jobs",
                            "btn-download-all", "results-panel"),
             "csvsession.html": ("btn-csv", "btn-img", "attach-panel",
-                                "btn-start-csv", "btn-download-all", "results-panel"),
+                                "btn-start-csv", "btn-download-all", "btn-clear-all", "results-panel"),
         }.items():
             parser = IdParser()
             parser.feed((STATIC / filename).read_text(encoding="utf-8"))

@@ -2414,9 +2414,32 @@ def delete_collection_one(cid: str):
     return _delete_collection_one(cid, collection)
 
 
+@app.delete("/api/csv-session")
+def delete_csv_session_collections():
+    """Chỉ xoá kết quả tạo từ bảng CSV; không chạm vào kết quả mockup."""
+    global ACTIVE_POOL
+    if ACTIVE_POOL and ACTIVE_LOOP and not ACTIVE_LOOP.is_closed():
+        ACTIVE_POOL.stopped = True
+        try:
+            ACTIVE_LOOP.call_soon_threadsafe(ACTIVE_POOL.stop)
+        except Exception:
+            pass
+    RUN["active"] = False
+    RUN["stopped"] = True
+
+    ids = [cid for cid, collection in COLLECTIONS.items()
+           if collection.get("free_sequence") and not collection.get("hidden")]
+    removed = 0
+    for cid in ids:
+        removed += _delete_collection_one(cid, COLLECTIONS[cid], force=True)["deleted_files"]
+    return {"ok": True, "deleted_collections": len(ids), "deleted_files": removed}
+
+
 @app.delete("/api/collections")
-def delete_mockup_collections():
-    """Chỉ xoá kết quả mockup; không chạm vào ảnh từ bảng CSV."""
+def delete_mockup_collections(mode: str = "mockup"):
+    """Chỉ xoá kết quả mockup (hoặc CSV nếu mode=csv-session)."""
+    if mode == "csv-session":
+        return delete_csv_session_collections()
     ids = [cid for cid, collection in COLLECTIONS.items()
            if not collection.get("free") and not collection.get("hidden")]
     if any(COLLECTIONS[cid].get("status") in ("pending", "running") or any(
@@ -2429,10 +2452,10 @@ def delete_mockup_collections():
     return {"ok": True, "deleted_collections": len(ids), "deleted_files": removed}
 
 
-def _delete_collection_one(cid: str, collection: dict):
-    if collection.get("status") in ("pending", "running") or any(
+def _delete_collection_one(cid: str, collection: dict, force: bool = False):
+    if not force and (collection.get("status") in ("pending", "running") or any(
             j.get("regen_status") in ("pending", "running")
-            for j in collection.get("jobs", [])):
+            for j in collection.get("jobs", []))):
         raise HTTPException(409, "Bộ đang tạo ảnh. Hãy dừng trước khi xoá.")
 
     own_jobs = collection.get("jobs", [])

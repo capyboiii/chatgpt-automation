@@ -14,24 +14,12 @@ browser:
   - name: acc4
     tabs: 1
     email: stucco.irons-5b@icloud.com
-  - name: acc5
-    tabs: 1
-    email: islet_parish9@icloud.com
   - name: acc6
     tabs: 1
     email: tuque-kit.7v+quasar9@icloud.com
-  - name: acc8
-    tabs: 1
-    email: banana-godhead-32+devteam14@icloud.com
-  - name: acc9
-    tabs: 1
-    email: upland-leaven-2k@icloud.com
   - name: acc7
     tabs: 1
     email: meek92.valid+fastpass14@icloud.com
-  - name: acc10
-    tabs: 1
-    email: hawk_sloth.3o@icloud.com
   tabs_per_account: 1
   generation_timeout: 300
   nav_timeout: 90

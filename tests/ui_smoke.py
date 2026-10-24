@@ -117,6 +117,7 @@ def main():
             else:
                 assert other.locator(".workflow-block #attach-panel").count() == 1
                 assert other.locator(".workflow-submit #btn-start-csv").count() == 1
+                assert other.locator("#results-panel #btn-clear-all").count() == 1
             other.wait_for_timeout(700)
             assert not page_errors, (path, page_errors)
             other.close()

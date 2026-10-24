@@ -12,6 +12,9 @@ function friendlyError(value) {
 
 let polling = null;
 let lastSignature = "";
+let currentCollections = [];
+let totalCsvRows = 0;
+let resultsPanelEverShown = false;
 let library = [];
 const picked = new Set();
 let csvFile = null;
@@ -183,6 +186,7 @@ $("#csv-input").onchange = async (event) => {
     $("#csv-size-enabled").checked = false;
     size.disabled = true;
     $("#csv-file-name").textContent = file.name;
+    totalCsvRows = Number(data.rows) || 0;
     $("#csv-row-count").textContent = `· ${data.rows} hàng · ${csvHeaders.length} cột`;
     $("#csv-field-panel").hidden = false;
     renderCsvFields();
@@ -222,6 +226,8 @@ $("#btn-start-csv").onclick = async () => {
     if (!response.ok) throw new Error(data.detail || "Không chạy được");
     localStorage.setItem(`csv-session-fields:${JSON.stringify(csvHeaders)}`,
       JSON.stringify({ prompts: promptFields }));
+    resultsPanelEverShown = true;
+    $("#results-panel").hidden = false;
     toast(`Đang tạo ảnh cho ${data.started} hàng`, "success");
     startPolling();
   } catch (error) {
@@ -386,17 +392,27 @@ async function refresh(manual = false) {
     if (!response.ok) throw new Error("Không cập nhật được kết quả");
     const data = await response.json();
     const collections = (data.collections || []).filter((row) => row.free_sequence);
+    currentCollections = collections;
+    if (collections.length > 0) {
+      resultsPanelEverShown = true;
+      if (collections.length > totalCsvRows) totalCsvRows = collections.length;
+    }
     const done = collections.filter((row) => row.status === "done").length;
     const finished = collections.filter((row) => ["done", "failed", "partial"].includes(row.status)).length;
     const images = collections.reduce((sum, row) => sum + row.jobs.reduce(
       (n, job) => n + (job.results || []).length, 0), 0);
-    $("#results-panel").hidden = !collections.length;
+    $("#results-panel").hidden = !collections.length && !resultsPanelEverShown;
     const canResume = !data.active && collections.some((row) =>
       ["failed", "paused", "partial"].includes(row.status));
     $("#btn-stop").disabled = !data.active;
     $("#btn-stop").hidden = !data.active;
     $("#btn-resume").disabled = !canResume;
     $("#btn-resume").hidden = !canResume;
+    const clearBtn = $("#btn-clear-all");
+    if (clearBtn) {
+      clearBtn.disabled = false;
+      clearBtn.title = "Xoá toàn bộ ảnh và kết quả đã tạo";
+    }
     const zip = $("#btn-download-all");
     zip.setAttribute("aria-disabled", images ? "false" : "true");
     zip.tabIndex = images ? 0 : -1;
@@ -412,6 +428,13 @@ async function refresh(manual = false) {
       renderCollections(collections, data.active);
     } else {
       lastSignature = "";
+      $("#list").innerHTML = "";
+      const total = totalCsvRows || 0;
+      $("#stat").textContent = `0/${total} hàng · 0 ảnh`;
+      $("#run-badge").textContent = `0/${total} hàng`;
+      $("#run-fill").style.width = "0%";
+      $("#run-text").textContent = "0 ảnh đã tạo";
+      $("#run-strip").classList.remove("is-running");
     }
     if (!data.active && polling) {
       clearInterval(polling);
@@ -422,6 +445,35 @@ async function refresh(manual = false) {
     if (manual) toast(error.message, "error");
   }
 }
+
+$("#btn-clear-all")?.addEventListener("click", async () => {
+  if (!confirm("Xoá toàn bộ ảnh đã tạo và làm mới danh sách?")) return;
+
+  try {
+    const response = await fetch("/api/csv-session", { method: "DELETE" });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Không xoá được kết quả");
+    toast(`Đã xoá ${data.deleted_files || 0} ảnh`, "success");
+    currentCollections = [];
+    lastSignature = "";
+    $("#list").innerHTML = "";
+    const total = totalCsvRows || 0;
+    $("#stat").textContent = `0/${total} hàng · 0 ảnh`;
+    $("#run-badge").textContent = `0/${total} hàng`;
+    $("#run-fill").style.width = "0%";
+    $("#run-text").textContent = "0 ảnh đã tạo";
+    $("#run-strip").classList.remove("is-running");
+    $("#btn-resume").hidden = true;
+    $("#btn-stop").hidden = true;
+    $("#btn-download-all").setAttribute("aria-disabled", "true");
+    $("#btn-download-all").tabIndex = -1;
+    resultsPanelEverShown = true;
+    $("#results-panel").hidden = false;
+    await refresh();
+  } catch (error) {
+    toast(error.message, "error");
+  }
+});
 
 function startPolling() {
   if (polling) clearInterval(polling);

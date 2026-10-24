@@ -337,6 +337,64 @@ class CsvSessionTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 409)
         self.assertIn("busy", server.COLLECTIONS)
 
+    def test_delete_all_csv_session_collections_removes_csv_and_keeps_mockup(self):
+        csv_folder = self.output / "CSVRow"
+        csv_folder.mkdir()
+        csv_img = csv_folder / "1.png"
+        csv_img.write_bytes(b"csv")
+        csv_url = "/files/outputs/CSVRow/1.png"
+        csv_job = {"id": "csv-j", "folder": "CSVRow", "results": [csv_url], "dest": str(csv_img),
+                   "status": "done"}
+
+        mockup_folder = self.output / "MockupRow"
+        mockup_folder.mkdir()
+        mockup_img = mockup_folder / "1.png"
+        mockup_img.write_bytes(b"mockup")
+        mockup_url = "/files/outputs/MockupRow/1.png"
+        mockup_job = {"id": "mockup-j", "folder": "MockupRow", "results": [mockup_url],
+                      "dest": str(mockup_img), "status": "done"}
+
+        server.COLLECTIONS["csv1"] = {"id": "csv1", "name": "CSV1", "free": True,
+                                      "free_sequence": True, "status": "done", "jobs": [csv_job]}
+        server.COLLECTIONS["mockup1"] = {"id": "mockup1", "name": "Mockup1", "free": False,
+                                         "free_sequence": False, "status": "done", "jobs": [mockup_job]}
+        server.JOBS.update({"csv-j": csv_job, "mockup-j": mockup_job})
+
+        with patch.object(server, "OUTPUTS", self.output), \
+             patch.object(server, "save_collections_state") as saved:
+            result = server.delete_csv_session_collections()
+
+        self.assertEqual(result["deleted_collections"], 1)
+        self.assertEqual(result["deleted_files"], 1)
+        self.assertNotIn("csv1", server.COLLECTIONS)
+        self.assertIn("mockup1", server.COLLECTIONS)
+        self.assertNotIn("csv-j", server.JOBS)
+        self.assertIn("mockup-j", server.JOBS)
+        self.assertFalse(csv_img.exists())
+        self.assertTrue(mockup_img.exists())
+        self.assertTrue(saved.called)
+
+    def test_delete_all_csv_session_stops_running_batch_and_clears_all(self):
+        server.COLLECTIONS["csv_busy"] = {"id": "csv_busy", "name": "Busy",
+                                          "free": True, "free_sequence": True,
+                                          "status": "running", "jobs": []}
+        server.RUN["active"] = True
+        with patch.object(server, "save_collections_state"):
+            result = server.delete_csv_session_collections()
+        self.assertEqual(result["deleted_collections"], 1)
+        self.assertNotIn("csv_busy", server.COLLECTIONS)
+        self.assertFalse(server.RUN["active"])
+
+    def test_delete_all_csv_session_route(self):
+        server.COLLECTIONS["csv_done"] = {"id": "csv_done", "name": "Done",
+                                          "free": True, "free_sequence": True,
+                                          "status": "done", "jobs": []}
+        with patch.object(server, "save_collections_state"):
+            response = TestClient(server.app).delete("/api/csv-session")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["deleted_collections"], 1)
+        self.assertNotIn("csv_done", server.COLLECTIONS)
+
     def test_three_selected_prompts_do_not_auto_add_size_chart(self):
         self.assertEqual(server.csv_session_start.__defaults__[-1].default, "__none__")
         csv_data = ("PROMPT 1,PROMPT 2,PROMPT 3,SIZE / VARIANT\n"

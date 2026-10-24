@@ -51,6 +51,7 @@
     .csvs-card-actions{display:flex;gap:7px;flex-wrap:wrap;align-items:center}
     .csvs-results-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap}
     .csvs-results-actions .btn{min-height:34px;white-space:nowrap}
+    .csvs-results-actions .btn:disabled{opacity:.45;cursor:not-allowed;pointer-events:none}
     .csvs-results-actions #btn-refresh{min-width:34px;padding:6px}
     .csvs-card-actions .csvs-delete{min-height:32px;border:1px solid var(--border);color:var(--err);background:var(--bg-panel-solid)}
     .csvs-card-actions .csvs-delete:disabled{opacity:.4;cursor:not-allowed}
@@ -112,7 +113,7 @@
       </div>
       <div id="warning-panel" class="csvs-warnings" hidden></div>
     </section>
-    <section class="panel panel-results" id="results-panel" hidden><div class="panel-head"><div class="panel-title-group"><div class="section-title-wrap"><h2><span class="step-number">4</span> Ảnh đã tạo</h2></div><span class="stat-pill-badge emerald"><span id="stat">0/0 hàng</span></span></div><div class="csvs-results-actions"><button id="btn-resume" class="btn primary-subtle sm" disabled hidden>▶ Chạy tiếp</button><button id="btn-stop" class="btn danger sm" disabled hidden title="Dừng tất cả tác vụ đang chạy">■ Dừng tất cả</button><a id="btn-download-all" href="/api/jobs/zip?mode=csv-session" class="btn primary-subtle sm" aria-disabled="true" tabindex="-1" title="Tải ảnh của tất cả các bộ">↓ Tải tất cả</a><button id="btn-refresh" class="btn action-btn sm" title="Cập nhật kết quả" aria-label="Cập nhật kết quả">↻</button></div></div><div id="run-strip" class="run-strip"><div class="run-strip-line"><span class="batch-badge" id="run-badge">0/0 hàng</span><span class="batch-status-text" id="run-text"></span></div><div class="progress-track"><div class="progress-fill" id="run-fill" style="width:0%"></div></div><div class="fleet-status-bar"><div id="fleet-chips" class="fleet-chips"></div></div></div><div id="list"></div></section>
+    <section class="panel panel-results" id="results-panel" hidden><div class="panel-head"><div class="panel-title-group"><div class="section-title-wrap"><h2><span class="step-number">4</span> Ảnh đã tạo</h2></div><span class="stat-pill-badge emerald"><span id="stat">0/0 hàng</span></span></div><div class="csvs-results-actions"><button id="btn-resume" class="btn primary-subtle sm" disabled hidden>▶ Chạy tiếp</button><button id="btn-stop" class="btn danger sm" disabled hidden title="Dừng tất cả tác vụ đang chạy">■ Dừng tất cả</button><a id="btn-download-all" href="/api/jobs/zip?mode=csv-session" class="btn primary-subtle sm" aria-disabled="true" tabindex="-1" title="Tải ảnh của tất cả các bộ">↓ Tải tất cả</a><button id="btn-clear-all" class="btn danger sm" title="Xoá toàn bộ ảnh và kết quả đã tạo">Xoá toàn bộ</button><button id="btn-refresh" class="btn action-btn sm" title="Cập nhật kết quả" aria-label="Cập nhật kết quả">↻</button></div></div><div id="run-strip" class="run-strip"><div class="run-strip-line"><span class="batch-badge" id="run-badge">0/0 hàng</span><span class="batch-status-text" id="run-text"></span></div><div class="progress-track"><div class="progress-fill" id="run-fill" style="width:0%"></div></div><div class="fleet-status-bar"><div id="fleet-chips" class="fleet-chips"></div></div></div><div id="list"></div></section>
   </main>
   <div id="csv-image-viewer" class="lightbox-modal" hidden role="dialog" aria-modal="true" aria-label="Xem ảnh">
     <div class="lightbox-backdrop"></div><div class="lightbox-content">
@@ -122,6 +123,6 @@
     </div>
   </div>
   <div id="toast-container" class="toast-container"></div>
-  <script src="csvsession.js?v=5"></script>
+  <script src="csvsession.js?v=7"></script>
 </body>
 </html>
